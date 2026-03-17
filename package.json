@@ -1,0 +1,19 @@
+{
+  "name": "gcp-docstore-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "jest --runInBand",
+    "lint": "echo 'no lint configured'"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "supertest": "^6.0.0",
+    "express": "^4.18.2"
+  }
+}

@@ -1,2 +1,6 @@
+node_modules/
+.secrets/
+.env
+coverage/
 .secrets
 .DS_Store
