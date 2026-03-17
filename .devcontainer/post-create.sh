@@ -5,9 +5,11 @@ echo "Running devcontainer post-create steps..."
 
 # Source devcontainer .env if present so post-create sees the same env as shells
 if [ -f ".devcontainer/.env" ]; then
+  set -a                # automatically export all subsequently defined vars
   # shellcheck disable=SC1090
   . ".devcontainer/.env"
-  echo "Sourced .devcontainer/.env"
+  set +a
+  echo "Sourced and exported .devcontainer/.env"
 fi
 
 # If Docker socket is mounted, create a group matching its GID and add the `node` user to it
@@ -75,9 +77,17 @@ fi
 
 echo "Devcontainer post-create steps complete."
 
-# Ensure interactive shells for the `node` user source the .devcontainer/.env file.
-# Keep this simple and idempotent: append a small snippet to /home/node/.profile
-# so interactive shells load the same devcontainer environment variables.
-echo "source /workspaces/test-gcp-cloudupload/.devcontainer/.env" >> "/home/node/.bashrc"
+# Ensure interactive shells for the `node` user source the .devcontainer/.env file
+# and export variables. Append a small idempotent snippet to /home/node/.bashrc so
+# interactive shells load the same devcontainer environment variables.
+cat >> "/home/node/.bashrc" <<'BASH'
+# Load devcontainer environment and export variables if present
+if [ -f "/workspaces/test-gcp-cloudupload/.devcontainer/.env" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "/workspaces/test-gcp-cloudupload/.devcontainer/.env"
+  set +a
+fi
+BASH
 
 
