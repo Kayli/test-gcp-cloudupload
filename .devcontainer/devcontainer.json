@@ -16,9 +16,9 @@
   "forwardPorts": [3000],
   "postCreateCommand": "bash .devcontainer/post-create.sh",
   "remoteUser": "node",
-  // Mount local workspace secrets to a generic location to prevent accidental commit
   "mounts": [
-    "source=${localWorkspaceFolder}/.secrets,target=/workspaces/.secrets,type=bind,consistency=cached"
+    "source=${localWorkspaceFolder}/.secrets,target=/workspaces/.secrets,type=bind,consistency=cached",
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
   ],
   "remoteEnv": {
     "GOOGLE_APPLICATION_CREDENTIALS": "/workspaces/.secrets/gcp-sa-key.json"
