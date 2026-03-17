@@ -2,6 +2,7 @@ import os
 import re
 import uuid
 from pathlib import Path
+from typing import Any, cast
 from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Depends, Request
@@ -44,8 +45,8 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
 
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(request: Request, exc: RequestValidationError):
-    first = exc.errors()[0] if exc.errors() else {}
-    msg = first.get("msg", "Invalid request")
+    first: dict[str, Any] = exc.errors()[0] if exc.errors() else {}
+    msg: str = str(first.get("msg", "Invalid request"))
     return JSONResponse(status_code=400, content={"error": msg})
 
 
@@ -54,13 +55,13 @@ async def http_error_handler(request: Request, exc: HTTPException):
     return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
 
 
-def verify_token(id_token: str):
+def verify_token(id_token: str) -> dict[str, Any]:
     request = google.auth.transport.requests.Request()
-    payload = google.oauth2.id_token.verify_oauth2_token(id_token, request, GOOGLE_CLIENT_ID)
+    payload = cast(dict[str, Any], google.oauth2.id_token.verify_oauth2_token(id_token, request, GOOGLE_CLIENT_ID))  # type: ignore[reportUnknownMemberType]
     return payload
 
 
-async def require_auth(request: Request):
+async def require_auth(request: Request) -> dict[str, Any]:
     # If GOOGLE_OAUTH_CLIENT_ID is set and dev auth is NOT allowed, expect Authorization: Bearer <id_token>
     if GOOGLE_CLIENT_ID and not ALLOW_DEV:
         auth = request.headers.get("authorization") or ""
@@ -90,13 +91,12 @@ async def health():
 
 
 @app.get("/config")
-async def config():
-    allow_dev = ALLOW_DEV
-    return {"googleClientId": GOOGLE_CLIENT_ID or None, "allowDevAuth": allow_dev}
+async def config() -> dict[str, Any]:
+    return {"googleClientId": GOOGLE_CLIENT_ID or None, "allowDevAuth": ALLOW_DEV}
 
 
 @app.post("/uploads")
-async def create_upload(req: UploadRequest, user=Depends(require_auth)):
+async def create_upload(req: UploadRequest, user: dict[str, Any] = Depends(require_auth)) -> dict[str, Any]:
     tenant = req.tenantId
     filename = req.filename
     if not tenant or not filename:
@@ -110,7 +110,7 @@ async def create_upload(req: UploadRequest, user=Depends(require_auth)):
 
 
 @app.get("/files/{id}/download")
-async def get_download(id: str, user=Depends(require_auth)):
+async def get_download(id: str, user: dict[str, Any] = Depends(require_auth)) -> dict[str, Any]:
     if not id:
         raise HTTPException(status_code=400, detail="id required")
     download_url = f"https://storage.googleapis.com/fake-bucket/files/{quote(id)}?signature=placeholder"
