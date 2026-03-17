@@ -17,7 +17,45 @@ The service must allow internal teams to:
 - Moderate traffic but production reliability required
 - Limited to a 2-hour exercise
 
-## Phase 0: Environment setup (mandatory, ~15 minutes)
+## Phase 0: CI/CD setup (mandatory, ~15 minutes)
+
+Before doing architecture work, ensure the repository is wired to GitHub with a minimal CI pipeline so changes can be validated and pushed to the remote.
+
+- Quick steps
+	- Create a remote GitHub repository (or use an existing one) and add it as `origin` in your local repo:
+
+		```bash
+		git remote add origin git@github.com:<org-or-user>/<repo>.git
+		git push -u origin main
+		```
+
+	- Add a basic GitHub Actions workflow at `.github/workflows/ci.yml` to run lint/tests and (optionally) build artifacts. Example minimal workflow:
+
+		```yaml
+		name: CI
+		on: [push, pull_request]
+		jobs:
+			build:
+				runs-on: ubuntu-latest
+				steps:
+					- uses: actions/checkout@v4
+					- name: Set up Node
+						uses: actions/setup-node@v4
+						with:
+							node-version: '18'
+					- name: Install
+						run: npm ci
+					- name: Lint
+						run: npm run lint --if-present
+					- name: Test
+						run: npm test --if-present
+		```
+
+	- Add repository secrets (e.g., `GCP_SA_KEY`) through GitHub Settings > Secrets if CI needs access to GCP for integration tests or deploy steps. Prefer short-lived credentials or Workload Identity federation for production.
+
+Timing: ~10–15 minutes to create remote, push, and add a minimal CI workflow so commits validate on GitHub.
+
+## Phase 1: Environment setup (mandatory, ~15 minutes)
 
 Before starting the timed planning exercise, ensure the local development environment can access GCP safely and reproducibly. Required quick steps:
 
@@ -132,7 +170,7 @@ Produce a structured planning document that includes:
 - Handling temporary download links (e.g., GCS Signed URLs)
 - Multi-tenancy isolation
 
-### 4a. Storage strategy (GCS + metadata schema)
+#### 4a. Storage strategy (GCS + metadata schema)
 
 Summary: Use Google Cloud Storage (GCS) for file blobs and Firestore for metadata. Keep object keys predictable and tenant-scoped so operational controls, lifecycle rules and signed-URL scoping are simple.
 
@@ -165,7 +203,7 @@ Summary: Use Google Cloud Storage (GCS) for file blobs and Firestore for metadat
 	- Monitor object counts and egress; signed-URL uploads shift network bandwidth to clients and reduce server costs.
 	- Use lifecycle tiers to reduce long-term storage cost; track Firestore document growth (index costs) for very large scales.
 
-### 4b. Access & Signed URLs (IAM, signed-V4, resumable uploads)
+#### 4b. Access & Signed URLs (IAM, signed-V4, resumable uploads)
 
 Summary: Use narrowly-scoped service accounts for server-side operations and issue short-lived Signed V4 URLs for client uploads/downloads. Favor resumable uploads for files near the 500 MB limit to avoid proxying large payloads through Cloud Run.
 
@@ -195,7 +233,7 @@ Summary: Use narrowly-scoped service accounts for server-side operations and iss
 - Large-file and client guidance
 	- Recommend client libraries and chunk sizes for resumable uploads; document recommended retry strategies and TTL expectations.
 
-### 4c. Multi-tenancy (logical vs physical)
+#### 4c. Multi-tenancy (logical vs physical)
 
 Summary: For the 2-hour prototype choose logical multi-tenancy (tenant ID in metadata with shared buckets). This minimizes setup complexity and eases cross-tenant operational tasks while noting production trade-offs.
 
