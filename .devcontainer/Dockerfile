@@ -25,13 +25,23 @@ RUN set -eux; \
   rm -rf /var/lib/apt/lists/*;
 
 # Install GitHub CLI (gh) and Dev Containers CLI
-RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
-  && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
-  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-    > /etc/apt/sources.list.d/github-cli.list \
-  && apt-get update && apt-get install -y --no-install-recommends gh \
-  && rm -rf /var/lib/apt/lists/* \
-  && npm install -g @devcontainers/cli && npm cache clean --force || true
+RUN set -eux; \
+  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg; \
+  chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg; \
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+    > /etc/apt/sources.list.d/github-cli.list; \
+  apt-get update; \
+  apt-get install -y --no-install-recommends gh; \
+  rm -rf /var/lib/apt/lists/*; \
+  # Install Dev Containers CLI as root and ensure binary is available
+  npm install -g --unsafe-perm @devcontainers/cli@latest; \
+  if [ -x "/usr/local/bin/devcontainer" ]; then \
+    echo "devcontainer installed at /usr/local/bin/devcontainer"; \
+  elif command -v devcontainer >/dev/null 2>&1; then \
+    ln -s "$(command -v devcontainer)" /usr/local/bin/devcontainer || true; \
+  fi; \
+  chmod a+rx /usr/local/bin/devcontainer || true; \
+  npm cache clean --force || true
 
 EXPOSE 3000
 
