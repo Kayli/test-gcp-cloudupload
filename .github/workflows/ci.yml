@@ -12,6 +12,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Build client
+        run: npm run build
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
