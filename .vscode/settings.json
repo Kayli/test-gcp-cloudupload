@@ -1,5 +1,11 @@
 {
     "files.exclude": {
     "**/__pycache__": true,
-  }
+  },
+  "python.testing.pytestArgs": [
+    "test"
+  ],
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true,
+  "python.terminal.useEnvFile": true
 }

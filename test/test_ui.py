@@ -6,10 +6,12 @@ then drives the upload and download flows via page.evaluate() so the
 browser's own fetch() carries the auth headers set by the JS app.
 """
 
+from playwright.sync_api import Page
+
 from helpers.server import APP_URL
 
 
-def test_ui_integration_flows(page) -> None:
+def test_ui_integration_flows(page: Page) -> None:
     # ── navigate & wait for DOM ───────────────────────────────────────────────
     page.goto(APP_URL)
     page.wait_for_load_state("domcontentloaded")

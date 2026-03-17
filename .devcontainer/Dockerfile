@@ -55,21 +55,22 @@ RUN set -eux; \
   npm install -g @devcontainers/cli@latest; \
   rm -rf /var/lib/apt/lists/*
 
-# Copy pyproject.toml last so changes to deps don't bust the apt/tool cache layers above
-COPY pyproject.toml README.md /tmp/app/
 
-RUN set -eux; \
-  python -m pip install --upgrade pip setuptools wheel; \
-  # Install the project (this will install dependencies declared in pyproject.toml)
-  python -m pip install /tmp/app; \
-  # If Playwright is a dependency, install the browser binaries
-  if python -c "import importlib,sys; sys.exit(0 if importlib.util.find_spec('playwright') else 1)"; then \
-    python -m playwright install --with-deps; \
-  else \
-    echo "Playwright not installed as a package; skipping browser install"; \
-  fi
-
-EXPOSE 3000
-
+  
+# Install Playwright browser binaries as the vscode user so they land in
+# /home/vscode/.cache/ms-playwright (where the vscode user will look at runtime).
 # Default to non-root 'vscode' user provided by the base image
 USER vscode
+RUN python -m pip install playwright; \
+    python -m playwright install chromium; \
+    python -m playwright install-deps chromium
+
+# Copy pyproject.toml last so changes to deps don't bust the apt/tool cache layers above
+USER root
+COPY pyproject.toml README.md /tmp/app/
+RUN set -eux; \
+    python -m pip install --upgrade pip setuptools wheel; \
+    # Install the project (this will install dependencies declared in pyproject.toml)
+    python -m pip install /tmp/app;
+
+EXPOSE 3000
