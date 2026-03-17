@@ -18,18 +18,9 @@
     </div>
 
     <section id="uploader" style="margin-top:1.5rem;display:none">
-      <h2>Upload</h2>
-      <label>Tenant ID <input id="tenantId" value="team-a" /></label>
-      <label>Filename <input id="filename" value="sample.txt" /></label>
-      <button id="get-url">Get upload URL</button>
-      <pre id="upload-result"></pre>
-    </section>
-
-    <section id="downloader" style="margin-top:1.5rem;display:none">
-      <h2>Download</h2>
-      <label>File ID <input id="fileId" value="abc123" /></label>
-      <button id="get-download">Get download URL</button>
-      <pre id="download-result"></pre>
+      <button id="upload-btn">Upload file</button>
+      <input id="file-input" type="file" style="display:none" />
+      <pre id="upload-result" style="margin-top:0.75rem"></pre>
     </section>
 
     <script>
@@ -43,9 +34,12 @@
         const signedEl = document.getElementById('signed-out');
         const fakeBtn = document.getElementById('fake-login');
         const uploader = document.getElementById('uploader');
-        const downloader = document.getElementById('downloader');
 
         const signedIn = !!idToken || !!dummyUser;
+        // hide Google sign-in area when signed in
+        const googleSigninEl = document.getElementById('google-signin');
+        if (googleSigninEl) googleSigninEl.style.display = signedIn ? 'none' : '';
+
         if (idToken) {
           // try to decode email from token
           try{
@@ -54,17 +48,29 @@
             signedEl.innerText = 'Signed in as ' + email;
           }catch(e){ signedEl.innerText = 'Signed in'; }
           fakeBtn.style.display = 'none';
+          if (googleSigninEl) googleSigninEl.style.display = 'none';
         } else if (dummyUser) {
           signedEl.innerText = 'Signed in as ' + dummyUser;
           fakeBtn.style.display = 'none';
+          if (googleSigninEl) googleSigninEl.style.display = 'none';
         } else {
           signedEl.innerText = 'Not signed in.';
           // show fake-login only when server explicitly allows dev auth
           fakeBtn.style.display = window._appConfig.allowDevAuth ? 'inline-block' : 'none';
         }
 
-        uploader.style.display = signedIn ? 'block' : 'none';
-        downloader.style.display = signedIn ? 'block' : 'none';
+        // When signed in show only the uploader (per requirement)
+        if (signedIn) {
+          // hide all top-level body children except the uploader
+          document.querySelectorAll('body > *').forEach(el => {
+            if (el.id !== 'uploader') el.style.display = 'none';
+          });
+          uploader.style.display = 'block';
+        } else {
+          // restore normal visibility for non-signed-in state
+          document.querySelectorAll('body > *').forEach(el => { el.style.display = ''; });
+          uploader.style.display = 'none';
+        }
       }
 
       async function initConfig(){
@@ -119,22 +125,36 @@
         return r.json();
       }
 
-      document.getElementById('get-url').addEventListener('click', async () => {
-        const tenantId = document.getElementById('tenantId').value;
-        const filename = document.getElementById('filename').value;
-        const res = await postJSON('/uploads', { tenantId, filename });
-        document.getElementById('upload-result').innerText = JSON.stringify(res, null, 2);
+      // Upload button triggers file picker
+      const uploadBtn = document.getElementById('upload-btn');
+      const fileInput = document.getElementById('file-input');
+      uploadBtn.addEventListener('click', () => fileInput.click());
+
+      fileInput.addEventListener('change', async (ev) => {
+        const file = ev.target.files && ev.target.files[0];
+        const out = document.getElementById('upload-result');
+        if (!file) return;
+        out.innerText = 'Requesting upload URL...';
+        try {
+          // For the prototype use a default tenantId (could be derived from user)
+          const tenantId = 'team-a';
+          const res = await postJSON('/uploads', { tenantId, filename: file.name });
+          out.innerText = 'Upload URL response:\n' + JSON.stringify(res, null, 2);
+          if (res.uploadUrl) {
+            out.innerText += '\n\nUploading file...';
+            try {
+              const uploadResp = await fetch(res.uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type || 'application/octet-stream' } });
+              out.innerText += '\nUpload finished: ' + uploadResp.status + ' ' + uploadResp.statusText;
+            } catch (e) {
+              out.innerText += '\nUpload failed: ' + e.message;
+            }
+          }
+        } catch (e) {
+          out.innerText = 'Error requesting upload URL: ' + e.message;
+        }
       });
 
-      document.getElementById('get-download').addEventListener('click', async () => {
-        const fileId = document.getElementById('fileId').value;
-        const headers = {};
-        if (idToken) headers['Authorization'] = 'Bearer ' + idToken;
-        else if (dummyUser) headers['x-dummy-user'] = dummyUser;
-        const r = await fetch('/files/' + encodeURIComponent(fileId) + '/download', { headers });
-        const j = await r.json();
-        document.getElementById('download-result').innerText = JSON.stringify(j, null, 2);
-      });
+      // download UI intentionally removed from the client-side source
 
       initConfig();
     </script>
