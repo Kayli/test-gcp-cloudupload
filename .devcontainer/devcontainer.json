@@ -16,11 +16,11 @@
   "forwardPorts": [3000],
   "postCreateCommand": "bash .devcontainer/post-create.sh",
   "remoteUser": "node",
-  // TODO: uncomment once you have the key file and GOOGLE_APPLICATION_CREDENTIALS set on the host
-  // "mounts": [
-  //   "source=${localEnv:GOOGLE_APPLICATION_CREDENTIALS},target=/workspaces/.secrets/gcloud-key,type=bind,consistency=cached"
-  // ],
+  // Mount local workspace secrets to a generic location to prevent accidental commit
+  "mounts": [
+    "source=${localWorkspaceFolder}/.secrets,target=/workspaces/.secrets,type=bind,consistency=cached"
+  ],
   "remoteEnv": {
-    "GOOGLE_APPLICATION_CREDENTIALS": "/workspaces/.secrets/gcloud-key"
+    "GOOGLE_APPLICATION_CREDENTIALS": "/workspaces/.secrets/gcp-sa-key.json"
   }
 }
