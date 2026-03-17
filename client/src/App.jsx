@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import AuthPanel from './AuthPanel.jsx'
+import Uploader from './Uploader.jsx'
 
 // Initialise window globals immediately so Playwright sees them as soon as the
 // module is evaluated — before the first React render.
@@ -12,8 +13,6 @@ export default function App() {
   const [dummyUser, _setDummyUser] = useState(null)
   const [idToken, _setIdToken] = useState(null)
   const [config, setConfig] = useState({ googleClientId: null, allowDevAuth: false })
-  const [uploadResult, setUploadResult] = useState('')
-  const fileInputRef = useRef(null)
 
   const signedIn = !!(idToken || dummyUser)
 
@@ -74,35 +73,6 @@ export default function App() {
     return r.json()
   }
 
-  async function handleFileChange(ev) {
-    const file = ev.target.files?.[0]
-    if (!file) return
-    setUploadResult('Requesting upload URL...')
-    try {
-      const res = await postJSON('/uploads', { tenantId: 'team-a', filename: file.name })
-      let text = 'Upload URL response:\n' + JSON.stringify(res, null, 2)
-      setUploadResult(text)
-      if (res.uploadUrl) {
-        text += '\n\nUploading file...'
-        setUploadResult(text)
-        try {
-          const uploadResp = await fetch(res.uploadUrl, {
-            method: 'PUT',
-            body: file,
-            headers: { 'Content-Type': file.type || 'application/octet-stream' },
-          })
-          setUploadResult(
-            text + '\nUpload finished: ' + uploadResp.status + ' ' + uploadResp.statusText,
-          )
-        } catch (e) {
-          setUploadResult(text + '\nUpload failed: ' + e.message)
-        }
-      }
-    } catch (e) {
-      setUploadResult('Error requesting upload URL: ' + e.message)
-    }
-  }
-
   // Derive signed-in status label.
   let statusText = 'Not signed in.'
   if (idToken) {
@@ -132,24 +102,7 @@ export default function App() {
 
       {/* Uploader — hidden until signed in; display toggled via inline style so
           Playwright can read element.style.display directly */}
-      <section
-        id="uploader"
-        style={{ marginTop: '1.5rem', display: signedIn ? 'block' : 'none' }}
-      >
-        <button id="upload-btn" onClick={() => fileInputRef.current?.click()}>
-          Upload file
-        </button>
-        <input
-          id="file-input"
-          ref={fileInputRef}
-          type="file"
-          style={{ display: 'none' }}
-          onChange={handleFileChange}
-        />
-        <pre id="upload-result" style={{ marginTop: '0.75rem' }}>
-          {uploadResult}
-        </pre>
-      </section>
+      <Uploader signedIn={signedIn} postJSON={postJSON} />
     </>
   )
 }
