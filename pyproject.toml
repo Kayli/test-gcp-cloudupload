@@ -1,0 +1,33 @@
+[project]
+name = "test-gcp-cloudupload"
+version = "0.0.0"
+description = "FastAPI replacement for legacy node app"
+readme = "README.md"
+requires-python = ">=3.8"
+
+dependencies = [
+  "fastapi>=0.95.0",
+  "uvicorn[standard]>=0.20.0",
+  "aiofiles>=23.1.0",
+  "python-multipart>=0.0.6",
+  "playwright>=1.35.0",
+  "google-auth>=2.20.0",
+  "requests>=2.28.0",
+  # test runner + browser automation
+  "pytest>=7.4.0",
+  "pytest-playwright>=0.4.3",
+]
+
+[tool.uv]
+# uv-specific configuration could go here if needed
+
+[tool.pytest.ini_options]
+# testpaths tells pytest where to look for tests.
+testpaths = ["test"]
+# pythonpath ensures both the workspace root (for `import main`, `from src.app …`)
+# and the test/ directory (for `from helpers.server import …`) are on sys.path.
+pythonpath = [".", "test"]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"

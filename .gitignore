@@ -4,3 +4,4 @@ node_modules/
 coverage/
 .secrets
 .DS_Store
+__pycache__/

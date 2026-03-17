@@ -12,7 +12,7 @@ if [ -f ".devcontainer/.env" ]; then
   echo "Sourced and exported .devcontainer/.env"
 fi
 
-# If Docker socket is mounted, create a group matching its GID and add the `node` user to it
+# If Docker socket is mounted, create a group matching its GID and add the `vscode` user to it
 if [ -S /var/run/docker.sock ]; then
   echo "Found docker socket at /var/run/docker.sock"
   DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)
@@ -37,14 +37,14 @@ if [ -S /var/run/docker.sock ]; then
       fi
   fi
 
-  echo "Adding user 'node' to group $GROUP_NAME"
+  echo "Adding user 'vscode' to group $GROUP_NAME"
   if command -v sudo >/dev/null 2>&1; then
-    sudo usermod -aG "$GROUP_NAME" node
+    sudo usermod -aG "$GROUP_NAME" vscode
   else
-    usermod -aG "$GROUP_NAME" node
+    usermod -aG "$GROUP_NAME" vscode
   fi
 
-  echo "Current groups for 'node': $(id -nG node)"
+  echo "Current groups for 'vscode': $(id -nG vscode)"
 else
   echo "No docker socket found at /var/run/docker.sock; skipping docker group setup."
 fi
@@ -59,28 +59,15 @@ else
   echo "   and re-open the devcontainer (or mount your secrets)."
 fi
 
-# If a Node.js project exists, install dependencies as the non-root `node` user
-if [ -f "package.json" ]; then
-  echo "package.json found — installing npm dependencies as 'node'..."
-  if [ "$(id -u)" -eq 0 ]; then
-    if command -v sudo >/dev/null 2>&1; then
-      sudo -u node npm install --silent --no-audit --no-fund
-    else
-      su -s /bin/bash node -c "npm install --silent --no-audit --no-fund"
-    fi
-  else
-    npm install --silent --no-audit --no-fund
-  fi
-else
-  echo "No package.json found; skipping npm install."
-fi
+echo "Dependency installation moved to Dockerfile build (uses pyproject.toml + uv)."
+echo "If you rebuild the devcontainer image, dependencies declared in `pyproject.toml` will be installed during the build."
 
 echo "Devcontainer post-create steps complete."
 
-# Ensure interactive shells for the `node` user source the .devcontainer/.env file
-# and export variables. Append a small idempotent snippet to /home/node/.bashrc so
+# Ensure interactive shells for the `vscode` user source the .devcontainer/.env file
+# and export variables. Append a small idempotent snippet to /home/vscode/.bashrc so
 # interactive shells load the same devcontainer environment variables.
-cat >> "/home/node/.bashrc" <<'BASH'
+cat >> "/home/vscode/.bashrc" <<'BASH'
 # Load devcontainer environment and export variables if present
 if [ -f "/workspaces/test-gcp-cloudupload/.devcontainer/.env" ]; then
   set -a

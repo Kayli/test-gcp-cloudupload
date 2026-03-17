@@ -7,8 +7,9 @@
   "customizations": {
     "vscode": {
       "extensions": [
-        "dbaeumer.vscode-eslint",
-        "esbenp.prettier-vscode",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-toolsai.jupyter",
         "ms-azuretools.vscode-docker"
       ]
     }
@@ -16,7 +17,7 @@
   "forwardPorts": [3000],
   "runArgs": ["--add-host=host.docker.internal:host-gateway"],
   "postCreateCommand": "bash .devcontainer/post-create.sh",
-  "remoteUser": "node",
+  "remoteUser": "vscode",
   "mounts": [
     "source=${localWorkspaceFolder}/.secrets,target=/workspaces/.secrets,type=bind,consistency=cached",
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
