@@ -32,11 +32,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ci-artifacts
+          if-no-files-found: ignore
           path: |
-            coverage || true
-            test-results || true
+            coverage
+            test-results
 
-  gcp-auth (optional):
+  gcp-auth-optional:
     runs-on: ubuntu-latest
     if: ${{ secrets.GCP_SA_KEY != '' }}
     steps:
