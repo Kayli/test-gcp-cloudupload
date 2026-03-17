@@ -78,9 +78,6 @@ echo "Devcontainer post-create steps complete."
 # Ensure interactive shells for the `node` user source the .devcontainer/.env file.
 # Keep this simple and idempotent: append a small snippet to /home/node/.profile
 # so interactive shells load the same devcontainer environment variables.
-WORKSPACE_FOLDER="/workspaces/$(basename "$PWD")"
-PROFILE="/home/node/.profile"
-ONE_LINER="[ -f \"$WORKSPACE_FOLDER/.devcontainer/.env\" ] && . \"$WORKSPACE_FOLDER/.devcontainer/.env\" # Source devcontainer environment"
-echo "$ONE_LINER" >> "$PROFILE"
-chown node:node "$PROFILE" 2>/dev/null
+echo "source /workspaces/test-gcp-cloudupload/.devcontainer/.env" >> "/home/node/.bashrc"
+
 

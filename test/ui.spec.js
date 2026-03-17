@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 const { APP_URL, ensureServer, stopServer } = require('./helpers/server');
 
 test.beforeAll(async () => {
