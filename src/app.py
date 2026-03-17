@@ -17,11 +17,7 @@ import google.auth.transport.requests
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
-
-# Prefer legacy/public if present, else public/
-public_candidate = BASE_DIR / "legacy" / "public"
-if not public_candidate.exists():
-    public_candidate = BASE_DIR / "public"
+public_candidate = BASE_DIR / "public"
 
 app = FastAPI(title="FastAPI host + API (replica)")
 
