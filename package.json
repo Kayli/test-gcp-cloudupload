@@ -6,9 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon --watch src --watch public --exec node src/index.js",
-    "test": "playwright test --workers=1",
-    "test:e2e": "playwright test test/ui.spec.js --workers=1",
-    "test:all": "playwright test --workers=1",
+    "test": "playwright test",
+    "test:e2e": "playwright test test/ui.spec.js",
     "lint": "echo 'no lint configured'"
   },
   "engines": {
