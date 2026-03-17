@@ -28,28 +28,10 @@ This skill codifies how the assistant should behave when working in this reposit
 - Ask before disruptive actions (rebuild containers, force-push, modifying production config).
 
 ## Step-by-step guidance
-
-1. Environment & Secrets
-   - Verify `.secrets/` exists and is listed in `.gitignore`.
-   - Mount `.secrets/` into the devcontainer via `devcontainer.json` instead of copying credentials into the repo.
-   - When moving a downloaded key, rename it to `gcp-sa-key.json` and place it in `.secrets/`.
-
-2. Making edits
-   - Preface the change with a one-line preamble explaining what will be modified and why.
-   - Use the repository patch tools when available to apply minimal diffs.
-   - After edits, run lightweight verification (e.g., `git status`, lint command) and report results.
-
-3. Error handling
-   - Replace `cmd || true` with explicit checks or a short explanatory fallback, for example:
-     ```bash
-     if ! git commit -m "msg"; then
-       echo "no changes to commit"
-     fi
-     ```
-
-4. Todo / Planning
-   - Keep the `TODO.md` file in sync with the Todo API and commit the file so plan state survives restarts.
-   - Mark tasks `in-progress` before starting, and `completed` after verification.
+## Guidance
+- Secrets: keep GCP service account JSON at `.secrets/gcp-sa-key.json` (gitignored).
+- Preface workspace-changing edits with a one-line preamble.
+- After changes to `.devcontainer/`, run `devcontainer build --workspace-folder .` to verify the container builds before asking the user to reload VS Code.
 
 ## Examples
 
@@ -68,4 +50,7 @@ This skill codifies how the assistant should behave when working in this reposit
 
 ## Validation
 - Keep this `SKILL.md` small (<500 lines). Move long references to `references/` if needed.
+
+## Devcontainer verification
+After modifying any files under `.devcontainer/`, run `devcontainer build --workspace-folder .` to verify the container builds successfully before asking the user to reload the devcontainer in VS Code.
 
