@@ -2,20 +2,20 @@ const { OAuth2Client } = require('google-auth-library');
 
 let client;
 const allowDev = process.env.ALLOW_DEV_AUTH === '1' || process.env.NODE_ENV === 'test';
-if (process.env.GOOGLE_CLIENT_ID && !allowDev) {
-  client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+if (process.env.GOOGLE_OAUTH_CLIENT_ID && !allowDev) {
+  client = new OAuth2Client(process.env.GOOGLE_OAUTH_CLIENT_ID);
 }
 
 async function verifyIdToken(idToken) {
   if (!client) return null;
-  const ticket = await client.verifyIdToken({ idToken, audience: process.env.GOOGLE_CLIENT_ID });
+  const ticket = await client.verifyIdToken({ idToken, audience: process.env.GOOGLE_OAUTH_CLIENT_ID });
   const payload = ticket.getPayload();
   return payload;
 }
 
 module.exports = async function auth(req, res, next) {
-  // If GOOGLE_CLIENT_ID is set and dev auth is NOT allowed, expect Authorization: Bearer <id_token>
-  if (process.env.GOOGLE_CLIENT_ID && !allowDev) {
+  // If GOOGLE_OAUTH_CLIENT_ID is set and dev auth is NOT allowed, expect Authorization: Bearer <id_token>
+  if (process.env.GOOGLE_OAUTH_CLIENT_ID && !allowDev) {
     const auth = req.get('authorization') || '';
     const m = auth.match(/^Bearer (.+)$/);
     if (!m) return res.status(401).json({ error: 'Missing Authorization header' });
