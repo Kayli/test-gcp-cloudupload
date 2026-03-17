@@ -20,7 +20,6 @@
   "mounts": [
     "source=${localWorkspaceFolder}/.secrets,target=/workspaces/.secrets,type=bind,consistency=cached",
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
-  ],
-  
+  ]
 }
 
