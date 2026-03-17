@@ -38,12 +38,21 @@ RUN set -eux; \
   if [ -x "/usr/local/bin/devcontainer" ]; then \
     echo "devcontainer installed at /usr/local/bin/devcontainer"; \
   elif command -v devcontainer >/dev/null 2>&1; then \
-    ln -s "$(command -v devcontainer)" /usr/local/bin/devcontainer || true; \
+    ln -s "$(command -v devcontainer)" /usr/local/bin/devcontainer; \
   fi; \
-  chmod a+rx /usr/local/bin/devcontainer || true; \
-  npm cache clean --force || true
+  chmod a+rx /usr/local/bin/devcontainer; \
+  npm cache clean --force
+
+# Install Playwright system dependencies (apt packages – must run as root)
+RUN set -eux; \
+  npx --yes playwright install-deps
 
 EXPOSE 3000
 
 # Default to non-root 'node' user provided by the base image
 USER node
+
+# Install Playwright browsers as the 'node' user so they land in
+# /home/node/.cache/ms-playwright – exactly where Playwright looks at test time.
+RUN set -eux; \
+  npx --yes playwright install

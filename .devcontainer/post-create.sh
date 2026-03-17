@@ -50,4 +50,21 @@ else
   echo "   and re-open the devcontainer (or mount your secrets)."
 fi
 
+# If a Node.js project exists, install dependencies as the non-root `node` user
+if [ -f "package.json" ]; then
+  echo "package.json found — installing npm dependencies as 'node'..."
+  if [ "$(id -u)" -eq 0 ]; then
+    if command -v sudo >/dev/null 2>&1; then
+      sudo -u node npm install --silent --no-audit --no-fund
+    else
+      su -s /bin/bash node -c "npm install --silent --no-audit --no-fund"
+    fi
+  else
+    npm install --silent --no-audit --no-fund
+  fi
+else
+  echo "No package.json found; skipping npm install."
+fi
+
 echo "Devcontainer post-create steps complete."
+

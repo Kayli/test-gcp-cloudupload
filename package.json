@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon --watch src --watch public --exec node src/index.js",
-    "test": "jest --runInBand",
+    "test": "playwright test --workers=1",
+    "test:e2e": "playwright test test/ui.spec.js --workers=1",
+    "test:all": "playwright test --workers=1",
     "lint": "echo 'no lint configured'"
   },
   "engines": {
@@ -17,10 +19,9 @@
     "google-auth-library": "^8.7.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.36.0",
     "chrome-remote-interface": "^0.34.0",
-    "jest": "^29.0.0",
     "nodemon": "^2.0.22",
-    "puppeteer-core": "^24.39.1",
-    "supertest": "^6.0.0"
+    "puppeteer-core": "^24.39.1"
   }
 }
