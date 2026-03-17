@@ -21,11 +21,6 @@
     "source=${localWorkspaceFolder}/.secrets,target=/workspaces/.secrets,type=bind,consistency=cached",
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
   ],
-  "remoteEnv": {
-    "GOOGLE_APPLICATION_CREDENTIALS": "/workspaces/.secrets/gcp-sa-key.json",
-    "GOOGLE_CLIENT_ID": "117938197293975641947.apps.googleusercontent.com",
-    "ALLOW_DEV_AUTH": "1",
-    "CHROME_REMOTE_DEBUGGING_URL": "http://host.docker.internal:9222"
-  }
+  
 }
 
