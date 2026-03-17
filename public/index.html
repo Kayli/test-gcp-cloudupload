@@ -1,0 +1,142 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>DocStore Prototype UI</title>
+    <style>
+      body { font-family: system-ui, sans-serif; padding: 2rem; }
+      label { display:block; margin-top: 0.5rem }
+    </style>
+  </head>
+  <body>
+    <h1>DocStore Prototype</h1>
+    <div id="auth">
+      <p id="signed-out">Not signed in.</p>
+      <button id="fake-login">Dev: Sign in as tester@example.com</button>
+      <div id="google-signin" style="margin-top:1rem"></div>
+    </div>
+
+    <section id="uploader" style="margin-top:1.5rem;display:none">
+      <h2>Upload</h2>
+      <label>Tenant ID <input id="tenantId" value="team-a" /></label>
+      <label>Filename <input id="filename" value="sample.txt" /></label>
+      <button id="get-url">Get upload URL</button>
+      <pre id="upload-result"></pre>
+    </section>
+
+    <section id="downloader" style="margin-top:1.5rem;display:none">
+      <h2>Download</h2>
+      <label>File ID <input id="fileId" value="abc123" /></label>
+      <button id="get-download">Get download URL</button>
+      <pre id="download-result"></pre>
+    </section>
+
+    <script>
+      // Basic dev auth flow: set a header for dev use.
+      // var (not let) so these are accessible as window.dummyUser / window.idToken from tests
+      var dummyUser = null;
+      var idToken = null;
+      window._appConfig = { googleClientId: null, allowDevAuth: false };
+
+      function updateAuthDisplay(){
+        const signedEl = document.getElementById('signed-out');
+        const fakeBtn = document.getElementById('fake-login');
+        const uploader = document.getElementById('uploader');
+        const downloader = document.getElementById('downloader');
+
+        const signedIn = !!idToken || !!dummyUser;
+        if (idToken) {
+          // try to decode email from token
+          try{
+            const payload = JSON.parse(atob(idToken.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+            const email = payload.email || 'unknown';
+            signedEl.innerText = 'Signed in as ' + email;
+          }catch(e){ signedEl.innerText = 'Signed in'; }
+          fakeBtn.style.display = 'none';
+        } else if (dummyUser) {
+          signedEl.innerText = 'Signed in as ' + dummyUser;
+          fakeBtn.style.display = 'none';
+        } else {
+          signedEl.innerText = 'Not signed in.';
+          // show fake-login only when server explicitly allows dev auth
+          fakeBtn.style.display = window._appConfig.allowDevAuth ? 'inline-block' : 'none';
+        }
+
+        uploader.style.display = signedIn ? 'block' : 'none';
+        downloader.style.display = signedIn ? 'block' : 'none';
+      }
+
+      async function initConfig(){
+        try{
+          const r = await fetch('/config');
+          const cfg = await r.json();
+          window._appConfig = cfg || window._appConfig;
+          if (cfg.googleClientId) {
+            // Dynamically load Google Identity Services and render button
+            const s = document.createElement('script');
+            s.src = 'https://accounts.google.com/gsi/client';
+            s.onload = () => initGSI(cfg.googleClientId);
+            document.head.appendChild(s);
+          }
+        }catch(e){
+          console.warn('Could not fetch config', e);
+        } finally {
+          window._configLoaded = true;
+          updateAuthDisplay();
+        }
+      }
+
+      function initGSI(clientId){
+        if (!window.google || !clientId) return;
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: handleCredentialResponse
+        });
+        window.google.accounts.id.renderButton(
+          document.getElementById('google-signin'),
+          { theme: 'outline', size: 'large' }
+        );
+        window.google.accounts.id.prompt();
+      }
+
+      function handleCredentialResponse(response){
+        // response.credential is the ID token (JWT)
+        idToken = response.credential;
+        updateAuthDisplay();
+      }
+
+      document.getElementById('fake-login').addEventListener('click', () => {
+        dummyUser = 'tester@example.com';
+        updateAuthDisplay();
+      });
+
+      async function postJSON(url, body){
+        const headers = { 'Content-Type':'application/json' };
+        if (idToken) headers['Authorization'] = 'Bearer ' + idToken;
+        else if (dummyUser) headers['x-dummy-user'] = dummyUser;
+        const r = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+        return r.json();
+      }
+
+      document.getElementById('get-url').addEventListener('click', async () => {
+        const tenantId = document.getElementById('tenantId').value;
+        const filename = document.getElementById('filename').value;
+        const res = await postJSON('/uploads', { tenantId, filename });
+        document.getElementById('upload-result').innerText = JSON.stringify(res, null, 2);
+      });
+
+      document.getElementById('get-download').addEventListener('click', async () => {
+        const fileId = document.getElementById('fileId').value;
+        const headers = {};
+        if (idToken) headers['Authorization'] = 'Bearer ' + idToken;
+        else if (dummyUser) headers['x-dummy-user'] = dummyUser;
+        const r = await fetch('/files/' + encodeURIComponent(fileId) + '/download', { headers });
+        const j = await r.json();
+        document.getElementById('download-result').innerText = JSON.stringify(j, null, 2);
+      });
+
+      initConfig();
+    </script>
+  </body>
+</html>
