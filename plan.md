@@ -132,47 +132,164 @@ Produce a structured planning document that includes:
 - Handling temporary download links (e.g., GCS Signed URLs)
 - Multi-tenancy isolation
 
+### 4a. Storage strategy (GCS + metadata schema)
+
+Summary: Use Google Cloud Storage (GCS) for file blobs and Firestore for metadata. Keep object keys predictable and tenant-scoped so operational controls, lifecycle rules and signed-URL scoping are simple.
+
+- Bucket & object layout
+	- Prototype: one project-level bucket (e.g., `gs://<project>-docstore`). Use separate buckets per environment (dev/prod). Defer per-tenant buckets unless regulatory isolation is required.
+	- Object key pattern: `tenant/{tenantId}/files/{yyyy}/{mm}/{uuid}` — date prefixes avoid single hot prefixes and make lifecycle selection easier.
+
+- Uploads & verification
+	- Clients use GCS V4 signed URLs (resumable uploads for large files). Signed URLs avoid proxying data through the API layer.
+	- After upload, record/verify object checksum (MD5 or CRC32c) and contentType in Firestore metadata; optionally compare object metadata to recorded checksum.
+
+- Lifecycle & versioning
+	- Use lifecycle rules to transition objects (e.g., Nearline after 30d, Coldline after 180d) and to delete after tenant retention period.
+	- Enable object versioning only if accidental-delete protection is required — versions increase storage cost and complexity.
+
+- Metadata schema (Firestore - single collection `files`)
+	- Document ID: file UUID
+	- Fields: `id`, `tenantId`, `ownerEmail` (or `ownerId`), `gcsPath`, `size`, `contentType`, `checksum`, `tags` (array), `status` (uploaded/processing/archived/deleted), `createdAt`, `updatedAt`, `retentionExpiresAt`
+	- Indexes: `tenantId` + `createdAt` (listings), `tenantId` + `tags` (tenant-scoped tag queries), `ownerEmail` + `createdAt`.
+
+- Query patterns & scaling
+	- Always scope queries by `tenantId`. Use cursor-based pagination for lists. Avoid broad cross-tenant scans in the prototype.
+	- Limit indexed arrays (tags) cardinality; prefer an allowed tag set or tag-count limits per file to avoid index explosion.
+
+- Deletion & garbage collection
+	- Two-step deletion: mark metadata `status=deleted` -> delete GCS object (or rely on lifecycle) -> remove metadata after retention/confirmation.
+	- Consider a background worker (Cloud Run job / Cloud Tasks) to reconcile metadata and objects periodically.
+
+- Operational notes & cost
+	- Monitor object counts and egress; signed-URL uploads shift network bandwidth to clients and reduce server costs.
+	- Use lifecycle tiers to reduce long-term storage cost; track Firestore document growth (index costs) for very large scales.
+
+### 4b. Access & Signed URLs (IAM, signed-V4, resumable uploads)
+
+Summary: Use narrowly-scoped service accounts for server-side operations and issue short-lived Signed V4 URLs for client uploads/downloads. Favor resumable uploads for files near the 500 MB limit to avoid proxying large payloads through Cloud Run.
+
+- IAM & service account scoping
+	- Create a dedicated service account for the DocStore backend (e.g., `docstore-sa@<project>.iam.gserviceaccount.com`).
+	- For the prototype, grant `roles/storage.objectAdmin` on the target bucket(s) scoped via bucket-level IAM bindings. For production, create distinct custom roles (signing vs metadata) and narrow permissions to least-privilege.
+	- Apply IAM Conditions where supported to restrict access to object prefixes like `projects/_/buckets/<bucket>/objects/tenant/${request.auth.claims.tenantId}/*`.
+
+- Signed V4 URL issuance
+	- Server (Cloud Run) validates the caller's Google SSO ID token, checks tenant context, then issues a Signed V4 URL with appropriate method (`PUT`/`POST`/`GET`) and headers.
+	- TTLs: keep download URLs short (5–15 minutes). For uploads, allow slightly longer (up to 30 minutes) to accommodate resumable flows and retries.
+	- Use service-account signing or Cloud KMS SignBlob to avoid embedding long-lived keys in container images.
+
+- Resumable uploads for large files
+	- Initiate a resumable upload session via a signed URL; the client receives a resumable session URI from GCS and uploads chunks directly to GCS.
+	- This prevents Cloud Run from handling large request bodies and mitigates timeout/memory limits.
+
+- Validation and finalization
+	- After upload completion, client notifies metadata API (or use Pub/Sub notifications) so the service can verify object existence, size and checksum, update Firestore metadata and set `status=uploaded`.
+	- Optionally use Cloud Storage notifications (Pub/Sub) to trigger asynchronous reconciliation and checksum verification jobs.
+
+- Security mitigations and operational controls
+	- Rate-limit signed-URL issuance per user; instrument logs/metrics for issuance and failed attempts.
+	- Because signed URLs cannot be revoked directly, enforce short TTLs and use object-level ACL/IAM or object deletion to mitigate abuse if needed.
+	- Monitor egress, failed uploads, and anomalous signed-URL patterns via Cloud Monitoring alerts.
+
+- Large-file and client guidance
+	- Recommend client libraries and chunk sizes for resumable uploads; document recommended retry strategies and TTL expectations.
+
+### 4c. Multi-tenancy (logical vs physical)
+
+Summary: For the 2-hour prototype choose logical multi-tenancy (tenant ID in metadata with shared buckets). This minimizes setup complexity and eases cross-tenant operational tasks while noting production trade-offs.
+
+- Logical multi-tenancy (recommended for prototype)
+	- Approach: single shared bucket per environment + Firestore `tenantId` field on metadata documents.
+	- Pros: simpler provisioning, lower operational overhead, easier to query across tenants for admin tasks, cheaper to manage at scale in Firestore.
+	- Cons: requires strict application-level scoping to avoid accidental access, more complex tenant-level quotas and per-tenant billing, potential noisy-neighbor concerns.
+	- Mitigations: enforce upload prefixes (`tenant/{tenantId}/...`), issue signed URLs scoped to tenant prefixes, use IAM Conditions where available, implement rate-limits and per-tenant quotas.
+
+- Physical multi-tenancy (bucket-per-tenant)
+	- Approach: provision a separate bucket per tenant or tenant groups.
+	- Pros: strong isolation (separation of data at storage level), easier per-tenant billing and lifecycle policies, simpler to meet strict compliance/regulatory requirements.
+	- Cons: operational overhead (many buckets), higher IAM management complexity, potential project/bucket limits at very large tenant counts.
+
+- Recommendation for 2-hour exercise
+	- Use logical multi-tenancy for speed: shared bucket + `tenantId` in Firestore, plus prefix-scoped signed URLs and monitoring.
+	- Document the migration plan to move to physical isolation if required later: automated bucket provisioning, tenant-export/import utilities, and updated IAM automation.
+
 ### 5. High-level system decomposition
-- Identify the main subsystems or services without yet designing their internals.
+
+Summary: Break the system into small, focused subsystems (serverless where possible) to keep the prototype simple and testable.
+
+- **Upload Service (Cloud Run)**
+	- Responsibilities: authenticate requester (ID token), authorize upload intent (prototype: minimal checks), create Signed V4 URL (resumable if needed), create initial metadata record (`status=uploading`), and return the signed URL to client.
+	- Endpoints:
+		- `POST /uploads` -> request signed upload URL (body: `tenantId`, `filename`, `contentType`, `size`, `tags`)
+		- `POST /uploads/:id/complete` -> confirm upload finished (client supplies checksum or object path)
+	- Inputs/Outputs: receives upload metadata; outputs signed URL and upload id.
+
+- **Download / Auth Service (Cloud Run or API Gateway + Cloud Run)**
+	- Responsibilities: validate client ID token, lookup metadata, optionally check tenant membership, generate short-lived Signed V4 download URLs, and enforce download limits.
+	- Endpoint: `GET /files/:id/download` -> returns Signed V4 GET URL.
+
+- **Metadata & Search Service (Cloud Run + Firestore)**
+	- Responsibilities: CRUD metadata documents in Firestore, provide paginated search by `tenantId`/`tags`/`owner`, and manage indexes.
+	- Endpoint examples: `GET /files?tenantId=...&cursor=...`, `GET /files/:id`, `PATCH /files/:id`.
+
+- **Reconciliation Worker (Cloud Run job / Cloud Tasks triggered by Pub/Sub)**
+	- Responsibilities: reconcile Pub/Sub notifications or periodically scan Firestore to ensure GCS objects and metadata match (checksums, sizes), set `status` appropriately, and retry failed validations.
+
+- **Admin / Orchestration (CLI scripts + small admin UI)**
+	- Responsibilities: tenant onboarding, lifecycle policy changes, bulk exports/imports, and running maintenance tasks. For prototype, prefer CLI scripts using the injected service account.
+
+- **Infrastructure & Integrations**
+	- Storage: GCS buckets (storage of blobs)
+	- Notifications: Cloud Storage -> Pub/Sub -> Reconciliation Worker
+	- Observability: Cloud Logging, Monitoring, Error Reporting.
+
+Deployment notes: use Cloud Run revisions for safe rollout, and Cloud Build / GitHub Actions for CI; keep container images small and stateless.
 
 ### 6. Risks and trade-offs
-- Identify the areas where different architectural choices may significantly affect the system.
+
+Summary: Document key risks introduced by the prototype choices, their impact, and short-term mitigations plus longer-term remediation paths.
+
+- Firestore indexing and query limits
+	- Risk: Large numbers of tags or high-cardinality indexed fields can cause index explosion and increased costs or quota issues.
+	- Impact: slower writes, higher storage/index costs, potential quota exhaustion.
+	- Mitigation: limit indexed array cardinality, use a controlled tag vocabulary, add composite indexes only where required, and monitor index growth; consider moving heavy search to a dedicated search service if needed.
+
+- Authentication & Authorization gaps (prototype decision)
+	- Risk: Deferring application-level AuthZ means potential accidental cross-tenant access if signed URLs or metadata are mis-scoped.
+	- Impact: data exposure, compliance violations.
+	- Mitigation: enforce tenant-scoped prefixes in signed URLs, keep very short TTLs, restrict service account permissions, enable Cloud Audit Logs and alerting; prioritize implementing server-side AuthZ before production.
+
+- Cold starts and request latency (Cloud Run)
+	- Risk: Cloud Run cold starts can increase latency for bursty workloads.
+	- Impact: poor user experience on first requests, potential SLA issues.
+	- Mitigation: tune concurrency and min-instances for critical endpoints, keep containers slim to reduce cold start time, and consider using Cloud Run with minimum instances for predictable traffic.
+
+- IAM and quota management at scale
+	- Risk: Bucket-per-tenant approach (if chosen later) increases IAM complexity and may hit resource limits for very large tenant counts.
+	- Impact: operational overhead, provisioning delays.
+	- Mitigation: prefer logical multi-tenancy initially; if moving to buckets-per-tenant, automate provisioning and monitor project/bucket quotas.
+
+- Large-file upload reliability and cost
+	- Risk: Failed large uploads increase storage ingress/egress and operational retries.
+	- Impact: wasted bandwidth/cost, inconsistent metadata/object state.
+	- Mitigation: use resumable uploads, require client retries with exponential backoff, verify checksums server-side, and use Pub/Sub notifications for async reconciliation.
+
+- Data residency, compliance, and encryption key management
+	- Risk: Regulatory or compliance requirements (CMEK, specific region storage) add complexity.
+	- Impact: additional engineering and operational burden, potential costs.
+	- Mitigation: identify compliance needs early; for prototype, document required controls and defer CMEK/VPC-SC work to a hardened production sprint.
+
+- Cost surprises (egress, Firestore index growth)
+	- Risk: signed-URL usage shifts bandwidth to clients but egress and storage lifecycle choices can still produce surprises.
+	- Impact: unexpectedly high monthly bills.
+	- Mitigation: set budgets/alerts in Cloud Billing, instrument cost-sensitive metrics, and review sample workloads for cost estimates.
+
+Decision notes: mark high-risk items as follow-up action items (AuthZ implementation, index strategy review, production-grade IAM scoping) before promoting to production.
 
 ## Output expectations
 - Structured outline (not a full architecture yet)
 - Focus on problem framing and decision planning
 - Diagrams optional but not required
 
-## Todo (consolidated)
 
-The actionable todo list for this 2-hour exercise. This file is the single source of truth for planning steps and progress.
-
-```markdown
-- [x] Secure API Key
-	- 1. Create `.secrets/` folder in workspace root. 2. Move `<id>.json` to `.secrets/gcp-sa-key.json`. 3. Add `/.secrets/` to `.gitignore`. 4. Run `git status` to verify the key is ignored.
-- [x] Configure Devcontainer Auth
-	- 1. Edit `.devcontainer/devcontainer.json`. 2. Add mount: `"source=${localWorkspaceFolder}/.secrets,target=/workspaces/.secrets,type=bind"`. 3. Add `"containerEnv": {"GOOGLE_APPLICATION_CREDENTIALS": "/workspaces/.secrets/gcp-sa-key.json"}`.
-- [~] Update Planning Document (in progress)
-	- 1. Edit the plan and insert 'Phase 0: Environment setup'. 2. Detail the `.secrets` creation, `.gitignore` update, and devcontainer binding parameters.
-- [ ] Section 1: Clarifying Assumptions
-	- 1. Identify missing info (e.g., expected read/write ratio). 2. State devcontainer assumptions (using direct GCP cloud connection via injected API key instead of local emulators).
-- [ ] Section 2: Key Capabilities
-	- 1. Map Upload/Download to GCS. 2. Map Metadata to Firestore. 3. Map Compute to Cloud Run/Cloud Functions.
-- [ ] Section 3: Non-functional Reqs
-	- 1. Scalability (10M files). 2. Security (data at rest/transit encryption). 3. Reliability (GCS multi-region vs regional). 4. Operational (monitoring via Cloud Logging).
-- [ ] Section 4: Storage Strategy
-	- 1. Outline blob storage structure in GCS. 2. Design metadata schema in Firestore to support tagging and fast lookups.
-- [ ] Section 4: Access & Signed URLs
-	- 1. Detail IAM Service Account roles. 2. Explain how GCS V4 Signed URLs will handle 500MB uploads/downloads securely without compute bottlenecks.
-- [ ] Section 4: Multi-tenancy
-	- 1. Compare Logical (Tenant ID in Firestore and shared buckets) vs Physical (Bucket per tenant). 2. Select approach for the 2-hour scope.
-- [ ] Section 5: System Decomposition
-	- 1. Outline high-level APIs/Subsystems (Upload Service, Download/Auth Service, Metadata Search Service). 2. Define inputs/outputs.
-- [ ] Section 6: Risks & Trade-offs
-	- 1. Identify risks (Firestore index limits, Cloud Run cold starts, IAM limits). 2. Capture mitigation ideas.
-- [ ] Final Review & Format
-	- 1. Review the final formulated document against the 'Output expectations' in `plan.md`. 2. Ensure it is a structured outline focused on framing rather than exhaustive architecture.
-
-
-Generated on: 2026-03-17
-```
