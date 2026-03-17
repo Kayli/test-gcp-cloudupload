@@ -7,24 +7,24 @@ name: CI
     branches: [ main ]
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          node-version: '18'
-          cache: 'npm'
+          python-version: '3.11'
+          cache: 'pip'
 
       - name: Install dependencies
-        run: npm ci
+        run: pip install .
 
       - name: Get installed Playwright version
         id: playwright-version
         run: |
-          echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./node_modules/@playwright/test/package.json').version)")" >> $GITHUB_ENV
+          echo "PLAYWRIGHT_VERSION=$(python -c "import playwright; print(playwright.__version__)")" >> $GITHUB_ENV
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
@@ -35,22 +35,21 @@ jobs:
 
       - name: Install Playwright browsers + system deps
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps
+        run: playwright install --with-deps chromium
 
       - name: Install Playwright system deps (browsers cached)
         if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps
-
-      - name: Lint
-        run: npm run lint
+        run: playwright install-deps chromium
 
       - name: Test
-        run: npm test
+        env:
+          ALLOW_DEV_AUTH: '1'
+        run: pytest test/ -v
 
-      - name: Upload coverage
+      - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage
+          name: test-results
           if-no-files-found: ignore
-          path: coverage
+          path: test-results
