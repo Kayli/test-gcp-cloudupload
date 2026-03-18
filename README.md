@@ -1,63 +1,114 @@
 # GCP Docstore Prototype
 
-Minimal prototype for the GCP Document Storage Service. Contains a small Express app with a health endpoint and tests.
+Full-stack prototype for a GCP Document Storage Service. A React/Vite frontend backed by a FastAPI server that issues signed object-storage URLs (MinIO in dev, GCS in prod) and tracks uploads in a SQLite metadata DB.
 
-Run locally:
+## Project layout
 
-```bash
-npm install
-npm test
-npm start
+```
+backend/          FastAPI app, DB, storage helpers, Dockerfile.api, pyproject.toml
+frontend/         React/Vite source, package.json, vite.config.js, Dockerfile.ui
+public/           Vite build output (served as static files by the API)
+test/
+  unit/           Pure Python unit tests (no services required)
+  integration/    End-to-end tests (spin up Docker services automatically)
+docker-compose.yml
+pyproject.toml    Root config — pytest settings only
 ```
 
-Devcontainer (recommended)
+## Quick start (devcontainer — recommended)
 
 1. Copy the example env file and fill in any local values:
 
 ```bash
 cp .devcontainer/.env.example .devcontainer/.env
-# edit .devcontainer/.env as needed
+# edit .devcontainer/.env as needed (GOOGLE_OAUTH_CLIENT_ID, GCS_BUCKET, …)
 ```
 
 2. Rebuild / re-open the devcontainer so the environment is loaded.
 
-3. (Optional) To run UI tests against your host's Chrome Canary, start it on the host:
+3. Start the full stack (MinIO + API + Vite dev server):
 
 ```bash
-bash host-start-browser.sh
+docker compose up
 ```
 
-4. Run tests inside the devcontainer. By default the devcontainer uses the `.env` setting
-	`USE_HOST_BROWSER=1` to connect to the host browser. To force headless you can prefix the
-	command with `USE_HOST_BROWSER=0`, for example:
+| Service | URL |
+|---------|-----|
+| Vite dev server (React UI, HMR) | http://localhost:5173 |
+| FastAPI backend | http://localhost:3000 |
+| MinIO S3 API | http://localhost:9000 |
+| MinIO Console | http://localhost:9001 |
+
+4. Run the test suite:
 
 ```bash
-USE_HOST_BROWSER=0 npm test
+pytest           # all tests (unit + integration)
+pytest test/unit # unit tests only (no Docker required)
 ```
 
-## Python / FastAPI (new)
+The integration tests detect whether the Docker services are already running and start them automatically if not.
 
-This workspace now includes a FastAPI server to serve the `legacy/public/` static files and a small API that mirrors the legacy Express app.
+## Running without devcontainer
 
-- Install dependencies (recommend using a venv):
+**Backend:**
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install .
+pip install ./backend
+uvicorn backend.app:app --reload --host 0.0.0.0 --port 3000
 ```
 
-- Run the server with `uvicorn`:
+**Frontend (separate terminal):**
 
 ```bash
-uvicorn src.app:app --reload --host 0.0.0.0 --port 3000
+npm ci --prefix frontend
+npm run dev --prefix frontend   # Vite dev server on :5173
 ```
 
-- The site will be served from `http://localhost:3000/` and the health endpoint is `http://localhost:3000/health`.
+**Build the frontend for production:**
 
-- The upload endpoints mirror the legacy API:
-	- `POST /uploads` (requires auth) — returns a signed upload URL placeholder
-	- `GET /files/:id/download` (requires auth) — returns a signed download URL placeholder
+```bash
+npm run build --prefix frontend  # outputs to public/
+```
 
-- To allow dev auth, set `ALLOW_DEV_AUTH=1` or run with `NODE_ENV=test`.
+## API
 
+All endpoints except `/health` and `/config` require authentication.
+
+**Auth:** Pass a Google ID token as `Authorization: Bearer <token>`.  
+**Dev mode:** Set `ALLOW_DEV_AUTH=1` and send `X-DUMMY-USER: user@example.com` instead.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Returns `{"status":"ok"}` |
+| `GET` | `/config` | Returns OAuth client ID and dev-auth flag |
+| `POST` | `/uploads` | Create a pending upload; returns a signed PUT URL |
+| `POST` | `/uploads/{id}/complete` | Mark an upload complete after the PUT succeeds |
+| `GET` | `/files` | List all uploads belonging to the authenticated user |
+| `GET` | `/files/{id}/download` | Return a short-lived signed GET URL for a file |
+
+## Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ALLOW_DEV_AUTH` | `0` | Set to `1` to enable the `X-DUMMY-USER` dev auth bypass |
+| `GOOGLE_OAUTH_CLIENT_ID` | *(unset)* | Google OAuth client ID for token verification |
+| `MINIO_ENDPOINT` | `http://localhost:9000` | MinIO S3 API endpoint (inside compose: `http://minio:9000`) |
+| `MINIO_PUBLIC_URL` | `http://localhost:5173` | Base URL embedded in presigned URLs (must be reachable by the browser) |
+| `MINIO_BUCKET` | `objstore` | Bucket name |
+| `MINIO_ACCESS_KEY` | `minioadmin` | MinIO access key |
+| `MINIO_SECRET_KEY` | `minioadmin` | MinIO secret key |
+| `GCS_BUCKET` | *(unset)* | Set to use GCS instead of MinIO |
+
+## UI tests against a host browser
+
+To run browser tests against Chrome Canary on the host machine, start it first (from the host):
+
+```bash
+bash scripts/host-start-browser.sh
+```
+
+The devcontainer sets `USE_HOST_BROWSER=1` by default, which connects Playwright to the host via `CHROME_REMOTE_DEBUGGING_URL`. To force headless mode:
+
+```bash
+USE_HOST_BROWSER=0 pytest test/integration
+```
