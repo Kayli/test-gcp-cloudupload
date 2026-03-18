@@ -7,7 +7,7 @@ via the isolated_db fixture in conftest.py.
 
 import pytest
 
-from src.db import complete_upload, get_file, insert_upload
+from src.db import complete_upload, get_file, insert_upload, list_files
 
 
 def _insert(**kwargs: object) -> None:
@@ -100,3 +100,57 @@ def test_completed_at_is_set_on_complete():
     assert row is not None
     assert row["completed_at"] is not None
     assert "T" in row["completed_at"]
+
+
+# ── list_files ───────────────────────────────────────────────────────────────────
+
+
+def test_list_files_returns_only_owner_records():
+    """Records are filtered strictly by owner_email."""
+    _insert(id="lf-1", owner_email="alice@example.com", filename="a.pdf")
+    _insert(id="lf-2", owner_email="bob@example.com",   filename="b.pdf")
+    _insert(id="lf-3", owner_email="alice@example.com", filename="c.pdf")
+
+    alice_rows = list_files("alice@example.com")
+    assert len(alice_rows) == 2
+    filenames = {r["filename"] for r in alice_rows}
+    assert filenames == {"a.pdf", "c.pdf"}
+
+    bob_rows = list_files("bob@example.com")
+    assert len(bob_rows) == 1
+    assert bob_rows[0]["filename"] == "b.pdf"
+
+
+def test_list_files_returns_empty_for_unknown_owner():
+    _insert(id="lf-4", owner_email="someone@example.com")
+    assert list_files("nobody@example.com") == []
+
+
+def test_list_files_ordered_newest_first():
+    """Rows must come back in descending created_at order."""
+    import time
+
+    _insert(id="lf-5", owner_email="order@example.com", filename="first.pdf")
+    time.sleep(0.01)  # ensure distinct timestamps
+    _insert(id="lf-6", owner_email="order@example.com", filename="second.pdf")
+
+    rows = list_files("order@example.com")
+    assert len(rows) == 2
+    assert rows[0]["filename"] == "second.pdf", "newest file must be first"
+    assert rows[1]["filename"] == "first.pdf"
+
+
+def test_list_files_capped_at_20():
+    """list_files must return at most 20 records even when more exist."""
+    for i in range(25):
+        insert_upload(
+            id=f"cap-{i}",
+            tenant_id="team-a",
+            filename=f"file-{i}.pdf",
+            object_key=f"tenant/team-a/files/cap-{i}/file-{i}.pdf",
+            content_type="application/pdf",
+            owner_email="capped@example.com",
+        )
+
+    rows = list_files("capped@example.com")
+    assert len(rows) == 20, "must return exactly 20 rows when more than 20 exist"

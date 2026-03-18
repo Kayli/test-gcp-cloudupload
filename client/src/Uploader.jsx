@@ -9,9 +9,10 @@ import { useRef, useState } from 'react'
  *
  * Props
  * -----
- * postJSON   {Function}  authenticated POST helper from App
+ * postJSON          {Function}  authenticated POST helper from App
+ * onUploadComplete  {Function}  called after a successful upload to trigger dashboard refresh
  */
-export default function Uploader({ postJSON }) {
+export default function Uploader({ postJSON, onUploadComplete }) {
   const [uploadResult, setUploadResult] = useState('')
   const fileInputRef = useRef(null)
 
@@ -57,6 +58,7 @@ export default function Uploader({ postJSON }) {
           `Status  : ${completeRes.status}\n` +
           `Size    : ${file.size} bytes`,
         )
+        onUploadComplete?.()
       } catch (e) {
         setUploadResult('Upload succeeded but registration failed: ' + e.message)
       }

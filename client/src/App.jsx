@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import AuthPanel from './AuthPanel.jsx'
 import Uploader from './Uploader.jsx'
+import Dashboard from './Dashboard.jsx'
 
 // Initialise window globals immediately so Playwright sees them as soon as the
 // module is evaluated — before the first React render.
@@ -13,6 +14,7 @@ export default function App() {
   const [dummyUser, _setDummyUser] = useState(null)
   const [idToken, _setIdToken] = useState(null)
   const [config, setConfig] = useState({ googleClientId: null, allowDevAuth: false })
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const signedIn = !!(idToken || dummyUser)
 
@@ -73,6 +75,15 @@ export default function App() {
     return r.json()
   }
 
+  async function getJSON(url) {
+    const headers = {}
+    if (idToken) headers['Authorization'] = 'Bearer ' + idToken
+    else if (dummyUser) headers['x-dummy-user'] = dummyUser
+    const r = await fetch(url, { headers })
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
+    return r.json()
+  }
+
   // Derive signed-in status label.
   let statusText = 'Not signed in.'
   if (idToken) {
@@ -101,7 +112,10 @@ export default function App() {
       />
 
       {/* Uploader — only rendered when signed in */}
-      {signedIn && <Uploader postJSON={postJSON} />}
+      {signedIn && <Uploader postJSON={postJSON} onUploadComplete={() => setRefreshKey((k) => k + 1)} />}
+
+      {/* Dashboard — only rendered when signed in */}
+      {signedIn && <Dashboard getJSON={getJSON} postJSON={postJSON} refreshKey={refreshKey} />}
     </>
   )
 }

@@ -140,3 +140,68 @@ def test_get_files_download_returns_404_for_unknown_id(api_context: APIRequestCo
         headers=_DUMMY_HEADERS,
     )
     assert resp.status == 404
+
+
+# ── GET /files (dashboard list) ───────────────────────────────────────────────
+
+
+def test_get_files_returns_list_for_authenticated_user(api_context: APIRequestContext) -> None:
+    """GET /files returns an array containing every upload made by the user."""
+    # Create and complete one upload so there is at least one record.
+    create_resp = api_context.post(
+        f"{APP_URL}/uploads",
+        headers=_JSON_HEADERS,
+        data=json.dumps({"tenantId": "team-a", "filename": "dashboard-test.txt"}),
+    )
+    assert create_resp.status == 200
+    upload_id = create_resp.json()["id"]
+
+    api_context.post(
+        f"{APP_URL}/uploads/{upload_id}/complete",
+        headers=_JSON_HEADERS,
+        data=json.dumps({"size": 512}),
+    )
+
+    resp = api_context.get(f"{APP_URL}/files", headers=_DUMMY_HEADERS)
+    assert resp.status == 200
+    body = resp.json()
+    assert "files" in body, "response must have a 'files' key"
+    assert isinstance(body["files"], list)
+
+    ids = [f["id"] for f in body["files"]]
+    assert upload_id in ids, "the upload we just created must appear in the list"
+
+    # Verify the shape of the matching record.
+    record = next(f for f in body["files"] if f["id"] == upload_id)
+    assert record["filename"] == "dashboard-test.txt"
+    assert record["status"] == "complete"
+    assert record["size"] == 512
+    assert "createdAt" in record
+    assert "completedAt" in record
+
+
+def test_get_files_requires_authentication(api_context: APIRequestContext) -> None:
+    """GET /files must reject unauthenticated requests with 401."""
+    resp = api_context.get(f"{APP_URL}/files")
+    assert resp.status == 401
+
+
+def test_get_files_does_not_return_other_users_files(api_context: APIRequestContext) -> None:
+    """Files uploaded by user A must not appear in user B's dashboard."""
+    user_a_headers = {"x-dummy-user": "usera@example.com", "content-type": "application/json"}
+    user_b_headers = {"x-dummy-user": "userb@example.com"}
+
+    # Upload a file as user A.
+    create_resp = api_context.post(
+        f"{APP_URL}/uploads",
+        headers=user_a_headers,
+        data=json.dumps({"tenantId": "team-x", "filename": "secret-a.pdf"}),
+    )
+    assert create_resp.status == 200
+    upload_id_a = create_resp.json()["id"]
+
+    # Fetch the list as user B — must not see user A's file.
+    resp = api_context.get(f"{APP_URL}/files", headers=user_b_headers)
+    assert resp.status == 200
+    ids = [f["id"] for f in resp.json()["files"]]
+    assert upload_id_a not in ids, "user B must not see user A's upload"

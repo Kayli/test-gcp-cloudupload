@@ -121,3 +121,12 @@ def get_file(id: str) -> Optional[sqlite3.Row]:
     """Fetch a single file record by id, or None if not found."""
     db = get_db()
     return db.execute("SELECT * FROM files WHERE id = ?", (id,)).fetchone()
+
+
+def list_files(owner_email: str) -> list[sqlite3.Row]:
+    """Return all file records belonging to *owner_email*, newest first."""
+    db = get_db()
+    return db.execute(
+        "SELECT * FROM files WHERE owner_email = ? ORDER BY created_at DESC LIMIT 20",
+        (owner_email,),
+    ).fetchall()

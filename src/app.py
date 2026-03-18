@@ -16,7 +16,7 @@ import google.oauth2.id_token
 import google.auth.transport.requests
 
 from src.storage import get_storage
-from src.db import complete_upload as db_complete_upload, get_file, insert_upload
+from src.db import complete_upload as db_complete_upload, get_file, insert_upload, list_files
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -179,6 +179,28 @@ async def get_download(
         "size": row["size"],
         "requestedBy": user.get("email"),
     }
+
+
+@app.get("/files")
+async def list_user_files(
+    user: dict[str, Any] = Depends(require_auth),
+) -> dict[str, Any]:
+    """Return all uploaded files that belong to the authenticated user."""
+    email = user.get("email", "")
+    rows = list_files(email)
+    files = [
+        {
+            "id": row["id"],
+            "filename": row["filename"],
+            "contentType": row["content_type"],
+            "size": row["size"],
+            "status": row["status"],
+            "createdAt": row["created_at"],
+            "completedAt": row["completed_at"],
+        }
+        for row in rows
+    ]
+    return {"files": files}
 
 
 # Serve static UI last so all API routes above take priority

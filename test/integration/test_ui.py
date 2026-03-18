@@ -118,3 +118,70 @@ def test_ui_integration_flows(page: Page) -> None:
     assert dl_res["status"] == 200
     assert dl_res["body"]["downloadUrl"], "download response must contain downloadUrl"
     assert dl_res["body"]["expiresIn"] > 0, "expiresIn must be positive"
+
+
+def test_dashboard_visible_after_login_and_shows_uploaded_file(page: Page) -> None:
+    """Dashboard must be absent before login, appear after login, and list uploaded files."""
+    page.goto(APP_URL)
+    page.wait_for_load_state("domcontentloaded")
+
+    # Dashboard must not exist before the user logs in.
+    assert not page.evaluate("() => !!document.getElementById('dashboard')"), (
+        "#dashboard must not be in the DOM before login"
+    )
+
+    # Sign in via the dev fake-login button.
+    page.evaluate("() => document.getElementById('fake-login')?.click()")
+    page.wait_for_timeout(300)
+
+    # Dashboard must now be mounted.
+    assert page.evaluate("() => !!document.getElementById('dashboard')"), (
+        "#dashboard must appear after login"
+    )
+
+    # Upload a file via the API so the dashboard has something to display.
+    upload_res = page.evaluate(
+        """async () => {
+            const h = { 'Content-Type': 'application/json' };
+            if (window.dummyUser) h['x-dummy-user'] = window.dummyUser;
+            if (window.idToken)   h['Authorization'] = 'Bearer ' + window.idToken;
+            const r = await fetch('/uploads', {
+                method: 'POST',
+                headers: h,
+                body: JSON.stringify({ tenantId: 'team-a', filename: 'ui-dashboard.pdf' }),
+            });
+            return { status: r.status, body: await r.json() };
+        }"""
+    )
+    assert upload_res["status"] == 200
+    upload_id = upload_res["body"]["id"]
+
+    # Mark the upload as complete.
+    page.evaluate(
+        """async (uid) => {
+            const h = { 'Content-Type': 'application/json' };
+            if (window.dummyUser) h['x-dummy-user'] = window.dummyUser;
+            if (window.idToken)   h['Authorization'] = 'Bearer ' + window.idToken;
+            await fetch(`/uploads/${uid}/complete`, {
+                method: 'POST', headers: h, body: JSON.stringify({ size: 256 }),
+            });
+        }""",
+        upload_id,
+    )
+
+    # Click the Refresh button inside the dashboard.
+    page.evaluate(
+        "() => document.querySelector('#dashboard .refresh-btn')?.click()"
+    )
+    page.wait_for_timeout(600)
+
+    # The filename must now appear somewhere inside the dashboard.
+    dashboard_text = page.evaluate(
+        "() => document.getElementById('dashboard')?.innerText ?? ''"
+    )
+    assert "ui-dashboard.pdf" in dashboard_text, (
+        "dashboard must display the filename of the uploaded file"
+    )
+    assert "complete" in dashboard_text.lower(), (
+        "dashboard must show 'complete' status for the finished upload"
+    )
