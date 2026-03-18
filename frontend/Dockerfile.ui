@@ -8,8 +8,8 @@ FROM node:18-slim
 WORKDIR /app
 
 # Install deps first for layer caching — only re-runs when lockfile changes
-COPY package.json package-lock.json ./
+COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
 # Source is bind-mounted by docker-compose
-CMD ["npx", "vite", "--host"]
+CMD ["npx", "vite", "--host", "--config", "frontend/vite.config.js"]
