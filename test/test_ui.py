@@ -37,15 +37,14 @@ def test_ui_integration_flows(page: Page) -> None:
     init = page.evaluate(
         """() => ({
             signedOutText:     document.getElementById('signed-out')?.innerText,
-            uploaderDisplay:   document.getElementById('uploader')?.style.display,
-            downloaderDisplay: document.getElementById('downloader')?.style.display,
+            uploaderExists:    !!document.getElementById('uploader'),
             gsiScriptLoaded:   !!document.querySelector('script[src*="accounts.google.com/gsi/client"]'),
             idToken:           !!window.idToken,
             dummyUser:         window.dummyUser || null,
         })"""
     )
     assert init["signedOutText"] is not None, "#signed-out element must exist"
-    assert init["uploaderDisplay"] == "none", "#uploader must be hidden before login"
+    assert not init["uploaderExists"], "#uploader must not be in the DOM before login"
     if has_sso:
         assert init["gsiScriptLoaded"], "GSI client script must be loaded when googleClientId is set"
 
@@ -56,14 +55,14 @@ def test_ui_integration_flows(page: Page) -> None:
     after_login = page.evaluate(
         """() => ({
             signedOutText:   document.getElementById('signed-out')?.innerText,
-            uploaderDisplay: document.getElementById('uploader')?.style.display,
+            uploaderExists:  !!document.getElementById('uploader'),
             dummyUser:       window.dummyUser,
         })"""
     )
     assert "tester@example.com" in (after_login["signedOutText"] or ""), (
         "#signed-out must show the dummy email after login"
     )
-    assert after_login["uploaderDisplay"] != "none", "#uploader must be visible after login"
+    assert after_login["uploaderExists"], "#uploader must be in the DOM after login"
     assert after_login["dummyUser"] == "tester@example.com"
 
     # ── POST /uploads via browser fetch ──────────────────────────────────────
