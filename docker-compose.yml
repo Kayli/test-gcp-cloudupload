@@ -10,9 +10,18 @@ version: "3.9"
 #   api     http://localhost:3000  (FastAPI, hot-reload via uvicorn --reload)
 #   minio   http://localhost:9000  (S3 API)   http://localhost:9001  (Console)
 #
-# The Vite proxy forwards /health /config /uploads /files → api:3000.
-# MinIO presigned URLs are rewritten to localhost:9000 so the browser can
-# upload/download directly without going through the backend.
+# Object storage routing
+# ----------------------
+# Port 9000 (MinIO) is only reachable inside the compose network; the host
+# browser cannot reach it directly when running under DinD.  Instead, all
+# MinIO traffic is proxied through the Vite dev server (port 5173, which VS
+# Code does forward to the host):
+#
+#   browser → localhost:5173/objstore/... → Vite proxy → minio:9000/objstore/...
+#
+# MINIO_PUBLIC_URL=http://localhost:5173 tells the API to generate presigned
+# URLs using the Vite host.  The bucket is named "objstore" to avoid colliding
+# with the /uploads API route that Vite already proxies to FastAPI.
 #
 # Credentials (MinIO): minioadmin / minioadmin
 
@@ -28,8 +37,8 @@ services:
       - .:/app              # bind-mount source for HMR
       - ui_node_modules:/app/node_modules  # keep container node_modules isolated
     environment:
-      # Proxy targets api by its compose service name
-      API_URL: http://api:3000
+      API_URL:   http://api:3000
+      MINIO_URL: http://minio:9000   # Vite proxy target for /objstore/* inside compose
     depends_on:
       api:
         condition: service_healthy
@@ -51,9 +60,12 @@ services:
       ALLOW_DEV_AUTH: "1"
       # MinIO reachable by service name inside Docker
       MINIO_ENDPOINT:    http://minio:9000
-      # Presigned URLs are rewritten to localhost so the browser can reach MinIO
-      MINIO_PUBLIC_URL:  http://localhost:9000
-      MINIO_BUCKET:      uploads
+      # Presigned URLs must point to the Vite dev server (localhost:5173) because
+      # that is the only port the host browser can reliably reach under DinD.
+      # Vite proxies /objstore/* → minio:9000 with changeOrigin:false so the
+      # Host header (and thus the S3 signature) stays consistent.
+      MINIO_PUBLIC_URL:  http://localhost:5173
+      MINIO_BUCKET:      objstore
       MINIO_ACCESS_KEY:  minioadmin
       MINIO_SECRET_KEY:  minioadmin
     depends_on:
@@ -69,7 +81,7 @@ services:
   # ── Object storage (MinIO — S3-compatible) ──────────────────────────────────
   minio:
     image: minio/minio:latest
-    container_name: docstore-minio
+    container_name: objstore-minio
     ports:
       - "9000:9000"   # S3-compatible API
       - "9001:9001"   # MinIO Console UI

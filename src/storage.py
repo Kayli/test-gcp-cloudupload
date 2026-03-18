@@ -56,60 +56,67 @@ class MinioStorage:
         from botocore.config import Config  # type: ignore[import]
 
         self._bucket = MINIO_BUCKET
+        cfg = Config(signature_version="s3v4")
+
+        # Used for bucket management (head_bucket, create_bucket) — connects to
+        # the internal Docker service name so it works inside the compose network.
         self._client = boto3.client(
             "s3",
             endpoint_url=MINIO_ENDPOINT,
             aws_access_key_id=MINIO_ACCESS_KEY,
             aws_secret_access_key=MINIO_SECRET_KEY,
-            config=Config(signature_version="s3v4"),
+            config=cfg,
             region_name="us-east-1",
         )
-        # Compute the public base once
-        self._public_base: Optional[str] = MINIO_PUBLIC_URL or MINIO_ENDPOINT
 
-    # -- internal helpers -----------------------------------------------------
-
-    def _rewrite_host(self, url: str) -> str:
-        """Replace the internal endpoint host with the public-facing URL."""
-        public = MINIO_PUBLIC_URL or MINIO_ENDPOINT
-        if public == MINIO_ENDPOINT:
-            return url
-        p_internal = urlparse(MINIO_ENDPOINT)
-        p_public   = urlparse(public)
-        parsed     = urlparse(url)
-        # Only rewrite if the host actually matches the internal endpoint
-        if parsed.netloc == p_internal.netloc:
-            return urlunparse(parsed._replace(scheme=p_public.scheme, netloc=p_public.netloc))
-        return url
+        # Used ONLY for presigning.
+        # boto3 embeds endpoint_url as the Host in the HMAC signature.  If we
+        # sign against the internal name (minio:9000) and then textually rewrite
+        # the URL to localhost:9000, the Host header the browser sends won't match
+        # the signed Host → MinIO returns 403 SignatureDoesNotMatch.
+        # Fix: sign against the public URL from the start — no rewriting needed.
+        presign_endpoint = MINIO_PUBLIC_URL or MINIO_ENDPOINT
+        self._presign_client = boto3.client(
+            "s3",
+            endpoint_url=presign_endpoint,
+            aws_access_key_id=MINIO_ACCESS_KEY,
+            aws_secret_access_key=MINIO_SECRET_KEY,
+            config=cfg,
+            region_name="us-east-1",
+        )
 
     # -- public API -----------------------------------------------------------
 
     def ensure_bucket(self) -> None:
-        """Create the bucket if it does not exist. Silently skips if MinIO is unreachable."""
+        """Create the bucket if it does not exist."""
+        import botocore.exceptions  # type: ignore[import]
         try:
             self._client.head_bucket(Bucket=self._bucket)
-        except Exception:
-            try:
+        except botocore.exceptions.ClientError as exc:
+            code = exc.response["Error"]["Code"]
+            if code in ("404", "NoSuchBucket"):
+                print(f"[storage] bucket '{self._bucket}' not found, creating…")
                 self._client.create_bucket(Bucket=self._bucket)
-            except Exception:
-                pass  # already exists or MinIO not yet up — not fatal at startup
+                print(f"[storage] bucket '{self._bucket}' created.")
+            else:
+                raise
 
     def generate_upload_url(self, key: str, content_type: str, expires: int = 900) -> str:
-        url: str = self._client.generate_presigned_url(
+        url: str = self._presign_client.generate_presigned_url(
             "put_object",
             Params={"Bucket": self._bucket, "Key": key, "ContentType": content_type},
             ExpiresIn=expires,
             HttpMethod="PUT",
         )
-        return self._rewrite_host(url)
+        return url
 
     def generate_download_url(self, key: str, expires: int = 300) -> str:
-        url: str = self._client.generate_presigned_url(
+        url: str = self._presign_client.generate_presigned_url(
             "get_object",
             Params={"Bucket": self._bucket, "Key": key},
             ExpiresIn=expires,
         )
-        return self._rewrite_host(url)
+        return url
 
 
 # ── GCS ───────────────────────────────────────────────────────────────────────
