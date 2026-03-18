@@ -76,6 +76,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
+      start_period: 5s
+      start_interval: 1s
 
 
   # ── Object storage (MinIO — S3-compatible) ──────────────────────────────────
@@ -96,6 +98,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 2s
+      start_interval: 2s
 
 volumes:
   minio_data:
