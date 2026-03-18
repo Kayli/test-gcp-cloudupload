@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently --names api,ui --prefix-colors cyan,magenta \"npm run dev:api\" \"npm run dev:client\"",
-    "dev:api": "ALLOW_DEV_AUTH=1 uvicorn main:app --host 0.0.0.0 --port 3000 --reload",
+    "dev:api": "ALLOW_DEV_AUTH=1 uvicorn backend.app:app --host 0.0.0.0 --port 3000 --reload",
     "dev:client": "vite",
     "build": "vite build",
     "preview": "vite preview",

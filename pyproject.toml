@@ -28,9 +28,12 @@ dependencies = [
 # testpaths covers both suites; run them together with `pytest` or individually
 # with `pytest test/unit` or `pytest test/integration`.
 testpaths = ["test/unit", "test/integration"]
-# pythonpath ensures the workspace root (for `import backend.*`, `import main`) and
+# pythonpath ensures the workspace root (for `import backend.*`) and
 # the integration helper package (for `from helpers.server import …`) are on sys.path.
 pythonpath = [".", "test/integration"]
+
+[tool.setuptools.packages.find]
+include = ["backend*"]
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
