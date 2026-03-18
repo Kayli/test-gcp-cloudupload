@@ -9,10 +9,9 @@ import { useRef, useState } from 'react'
  *
  * Props
  * -----
- * signedIn   {boolean}   whether the user is authenticated (controls visibility)
  * postJSON   {Function}  authenticated POST helper from App
  */
-export default function Uploader({ signedIn, postJSON }) {
+export default function Uploader({ postJSON }) {
   const [uploadResult, setUploadResult] = useState('')
   const fileInputRef = useRef(null)
 
@@ -69,7 +68,7 @@ export default function Uploader({ signedIn, postJSON }) {
   return (
     <section
       id="uploader"
-      style={{ marginTop: '1.5rem', display: signedIn ? 'block' : 'none' }}
+      style={{ marginTop: '1.5rem' }}
     >
       <button id="upload-btn" onClick={() => fileInputRef.current?.click()}>
         Upload file

@@ -28,6 +28,19 @@ def test_post_uploads_returns_upload_url(api_context: APIRequestContext) -> None
     assert body.get("uploadUrl"), "response must include an uploadUrl"
     assert body.get("expiresIn"), "response must include expiresIn"
 
+    # Actually PUT data through the signed URL — proves MinIO is reachable.
+    # boto3 generates presigned URLs locally (no MinIO contact needed), so
+    # without this step the test passes even when MinIO is completely down.
+    put_resp = api_context.fetch(
+        body["uploadUrl"],
+        method="PUT",
+        data=b"hello from test",
+        headers={"content-type": "application/octet-stream"},
+    )
+    assert put_resp.status in (200, 204), (
+        f"PUT to presigned uploadUrl failed ({put_resp.status}) — is MinIO running?"
+    )
+
 
 def test_post_uploads_without_required_fields_returns_400(api_context: APIRequestContext) -> None:
     resp = api_context.post(
@@ -71,19 +84,37 @@ def test_post_uploads_complete_marks_record(api_context: APIRequestContext) -> N
 
 
 def test_get_files_download_returns_download_url(api_context: APIRequestContext) -> None:
-    # Full happy-path: create → complete → download
+    # Full happy-path: create → PUT → complete → download → verify round-trip.
+    # Every step that touches a presigned URL exercises MinIO directly so the
+    # test will fail fast when MinIO is down.
+    file_content = b"round-trip payload for photo test"
+    content_type = "image/jpeg"
+
     create_resp = api_context.post(
         f"{APP_URL}/uploads",
         headers=_JSON_HEADERS,
-        data=json.dumps({"tenantId": "team-a", "filename": "photo.jpg", "contentType": "image/jpeg"}),
+        data=json.dumps({"tenantId": "team-a", "filename": "photo.jpg", "contentType": content_type}),
     )
     assert create_resp.status == 200
-    upload_id = create_resp.json()["id"]
+    create_body = create_resp.json()
+    upload_id = create_body["id"]
+    upload_url = create_body["uploadUrl"]
+
+    # PUT the actual bytes — fails immediately if MinIO is unreachable.
+    put_resp = api_context.fetch(
+        upload_url,
+        method="PUT",
+        data=file_content,
+        headers={"content-type": content_type},
+    )
+    assert put_resp.status in (200, 204), (
+        f"PUT to presigned uploadUrl failed ({put_resp.status}) — is MinIO running?"
+    )
 
     api_context.post(
         f"{APP_URL}/uploads/{upload_id}/complete",
         headers=_JSON_HEADERS,
-        data=json.dumps({"size": 512}),
+        data=json.dumps({"size": len(file_content)}),
     )
 
     resp = api_context.get(
@@ -94,6 +125,13 @@ def test_get_files_download_returns_download_url(api_context: APIRequestContext)
     body = resp.json()
     assert "downloadUrl" in body, "response must include downloadUrl"
     assert "expiresIn" in body, "response must include expiresIn"
+
+    # GET through the signed download URL and verify the exact bytes come back.
+    get_resp = api_context.fetch(body["downloadUrl"], method="GET")
+    assert get_resp.status == 200, (
+        f"GET from presigned downloadUrl failed ({get_resp.status}) — is MinIO running?"
+    )
+    assert get_resp.body() == file_content, "downloaded content does not match what was uploaded"
 
 
 def test_get_files_download_returns_404_for_unknown_id(api_context: APIRequestContext) -> None:

@@ -100,9 +100,8 @@ export default function App() {
         onFakeLogin={handleFakeLogin}
       />
 
-      {/* Uploader — hidden until signed in; display toggled via inline style so
-          Playwright can read element.style.display directly */}
-      <Uploader signedIn={signedIn} postJSON={postJSON} />
+      {/* Uploader — only rendered when signed in */}
+      {signedIn && <Uploader postJSON={postJSON} />}
     </>
   )
 }
