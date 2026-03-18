@@ -4,12 +4,10 @@
 #
 # What this changes from the base file:
 #
-#   api.env_file     → cleared (the .devcontainer/.env file doesn't exist in CI)
 #   api.MINIO_PUBLIC_URL → http://localhost:9000 (MinIO's exposed host port, reachable
 #                          by the test runner on the GH Actions host — Vite isn't running)
 
 services:
   api:
-    env_file: []                                  # .devcontainer/.env doesn't exist in CI
     environment:
       MINIO_PUBLIC_URL: "http://localhost:9000"   # presigned URLs must be reachable from the host runner

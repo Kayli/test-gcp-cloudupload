@@ -54,7 +54,8 @@ services:
       - .:/app                # bind-mount source for hot-reload
       - api_data:/app/data    # persist SQLite metadata DB
     env_file:
-      - .devcontainer/.env   # provides GOOGLE_OAUTH_CLIENT_ID and GCS_BUCKET etc.
+      - path: .devcontainer/.env   # provides GOOGLE_OAUTH_CLIENT_ID and GCS_BUCKET etc.
+        required: false            # file is absent in CI; all vars have safe defaults
     environment:
       ALLOW_DEV_AUTH: "1"
       # MinIO reachable by service name inside Docker
