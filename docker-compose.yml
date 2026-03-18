@@ -60,11 +60,11 @@ services:
       ALLOW_DEV_AUTH: "1"
       # MinIO reachable by service name inside Docker
       MINIO_ENDPOINT:    http://minio:9000
-      # Presigned URLs must point to the Vite dev server (localhost:5173) because
-      # that is the only port the host browser can reliably reach under DinD.
-      # Vite proxies /objstore/* → minio:9000 with changeOrigin:false so the
-      # Host header (and thus the S3 signature) stays consistent.
-      MINIO_PUBLIC_URL:  http://localhost:5173
+      # Presigned URLs must point to wherever the client can actually reach MinIO.
+      # Default: the Vite dev server proxy (for full `docker compose up` with browser).
+      # Override by setting MINIO_PUBLIC_URL in the environment before running compose,
+      # e.g. when running tests without Vite: MINIO_PUBLIC_URL=http://localhost:9000
+      MINIO_PUBLIC_URL:  ${MINIO_PUBLIC_URL:-http://localhost:5173}
       MINIO_BUCKET:      objstore
       MINIO_ACCESS_KEY:  minioadmin
       MINIO_SECRET_KEY:  minioadmin

@@ -57,24 +57,26 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: playwright install-deps chromium
 
-      # Spin up the full compose stack (minio + api) using the CI override which:
-      #   • clears env_file (.devcontainer/.env doesn't exist in CI)
-      #   • sets MINIO_PUBLIC_URL=http://localhost:9000 so presigned URLs point to
-      #     the MinIO port exposed on the host (not the Vite proxy used in dev)
+      # Spin up the full compose stack (minio + api).
+      # MINIO_PUBLIC_URL overrides the Vite-proxy default so presigned URLs
+      # point to the MinIO port exposed on the host runner instead.
       # --wait blocks until both services pass their healthchecks.
+      # The integration tests detect the server is already up and skip auto-start.
       - name: Start services
+        env:
+          MINIO_PUBLIC_URL: http://localhost:9000
         run: |
-          docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --wait api
+          docker compose up -d --wait api
 
       - name: Test
         env:
           ALLOW_DEV_AUTH: '1'
           APP_URL: 'http://localhost:3000'
-        run: pytest test/ -v
+        run: pytest -v
 
       - name: Stop services
         if: always()
-        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v
+        run: docker compose down -v
 
       - name: Upload test results
         if: always()

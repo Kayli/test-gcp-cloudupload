@@ -25,11 +25,12 @@ dependencies = [
 # uv-specific configuration could go here if needed
 
 [tool.pytest.ini_options]
-# testpaths tells pytest where to look for tests.
-testpaths = ["test"]
-# pythonpath ensures both the workspace root (for `import main`, `from src.app …`)
-# and the test/ directory (for `from helpers.server import …`) are on sys.path.
-pythonpath = [".", "test"]
+# testpaths covers both suites; run them together with `pytest` or individually
+# with `pytest test/unit` or `pytest test/integration`.
+testpaths = ["test/unit", "test/integration"]
+# pythonpath ensures the workspace root (for `import src.*`, `import main`) and
+# the integration helper package (for `from helpers.server import …`) are on sys.path.
+pythonpath = [".", "test/integration"]
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
