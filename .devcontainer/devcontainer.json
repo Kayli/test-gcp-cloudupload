@@ -4,6 +4,9 @@
     "dockerfile": "Dockerfile",
     "context": ".."
   },
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
   "customizations": {
     "vscode": {
       "extensions": [
@@ -14,13 +17,11 @@
       ]
     }
   },
-  "forwardPorts": [3000],
+  "forwardPorts": [3000, 5173, 9000, 9001],
   "runArgs": ["--add-host=host.docker.internal:host-gateway"],
   "postCreateCommand": "bash .devcontainer/post-create.sh",
   "remoteUser": "vscode",
   "mounts": [
-    "source=${localWorkspaceFolder}/.secrets,target=/workspaces/.secrets,type=bind,consistency=cached",
-    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+    "source=${localWorkspaceFolder}/.secrets,target=/workspaces/.secrets,type=bind,consistency=cached"
   ]
 }
-

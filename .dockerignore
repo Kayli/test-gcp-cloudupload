@@ -1,0 +1,13 @@
+# Files that should NOT be copied into API or UI images
+node_modules/
+.git/
+.devcontainer/
+.github/
+.secrets/
+.pytest_cache/
+__pycache__/
+*.pyc
+data/
+public/
+.DS_Store
+.env

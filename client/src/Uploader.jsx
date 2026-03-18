@@ -19,26 +19,47 @@ export default function Uploader({ signedIn, postJSON }) {
   async function handleFileChange(ev) {
     const file = ev.target.files?.[0]
     if (!file) return
-    setUploadResult('Requesting upload URL...')
+    setUploadResult('Requesting upload URL…')
     try {
-      const res = await postJSON('/uploads', { tenantId: 'team-a', filename: file.name })
-      let text = 'Upload URL response:\n' + JSON.stringify(res, null, 2)
-      setUploadResult(text)
-      if (res.uploadUrl) {
-        text += '\n\nUploading file...'
-        setUploadResult(text)
-        try {
-          const uploadResp = await fetch(res.uploadUrl, {
-            method: 'PUT',
-            body: file,
-            headers: { 'Content-Type': file.type || 'application/octet-stream' },
-          })
-          setUploadResult(
-            text + '\nUpload finished: ' + uploadResp.status + ' ' + uploadResp.statusText,
-          )
-        } catch (e) {
-          setUploadResult(text + '\nUpload failed: ' + e.message)
-        }
+      const res = await postJSON('/uploads', {
+        tenantId: 'team-a',
+        filename: file.name,
+        contentType: file.type || 'application/octet-stream',
+      })
+      if (!res.uploadUrl) {
+        setUploadResult('Error: no uploadUrl in response\n' + JSON.stringify(res, null, 2))
+        return
+      }
+
+      setUploadResult('Uploading directly to storage…')
+      let uploadResp
+      try {
+        uploadResp = await fetch(res.uploadUrl, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        })
+      } catch (e) {
+        setUploadResult('Upload failed: ' + e.message)
+        return
+      }
+
+      if (!uploadResp.ok) {
+        setUploadResult(`Upload failed: ${uploadResp.status} ${uploadResp.statusText}`)
+        return
+      }
+
+      setUploadResult('Registering upload…')
+      try {
+        const completeRes = await postJSON(`/uploads/${res.id}/complete`, { size: file.size })
+        setUploadResult(
+          `Upload complete ✓\n` +
+          `File ID : ${completeRes.id}\n` +
+          `Status  : ${completeRes.status}\n` +
+          `Size    : ${file.size} bytes`,
+        )
+      } catch (e) {
+        setUploadResult('Upload succeeded but registration failed: ' + e.message)
       }
     } catch (e) {
       setUploadResult('Error requesting upload URL: ' + e.message)

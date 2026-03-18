@@ -1,0 +1,15 @@
+# Vite dev server image.
+# node_modules are installed during the image build and kept in an anonymous
+# volume so they are never shadowed by a host bind-mount.
+# Source code is bind-mounted at runtime for HMR hot-reload.
+
+FROM node:18-slim
+
+WORKDIR /app
+
+# Install deps first for layer caching — only re-runs when lockfile changes
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# Source is bind-mounted by docker-compose
+CMD ["npx", "vite", "--host"]

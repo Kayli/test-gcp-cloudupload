@@ -85,15 +85,36 @@ def test_ui_integration_flows(page: Page) -> None:
     assert upload_res["body"]["uploadUrl"], "upload response must contain uploadUrl"
     assert upload_res["body"]["expiresIn"] > 0, "expiresIn must be positive"
 
+    upload_id = upload_res["body"]["id"]
+
+    # ── POST /uploads/:id/complete (simulate post-upload callback) ────────────
+    complete_res = page.evaluate(
+        """async (uploadId) => {
+            const h = { 'Content-Type': 'application/json' };
+            if (window.dummyUser) h['x-dummy-user'] = window.dummyUser;
+            if (window.idToken)   h['Authorization'] = 'Bearer ' + window.idToken;
+            const r = await fetch(`/uploads/${uploadId}/complete`, {
+                method: 'POST',
+                headers: h,
+                body: JSON.stringify({ size: 1024 }),
+            });
+            return { status: r.status, body: await r.json() };
+        }""",
+        upload_id,
+    )
+    assert complete_res["status"] == 200
+    assert complete_res["body"]["status"] == "complete"
+
     # ── GET /files/:id/download via browser fetch ─────────────────────────────
     dl_res = page.evaluate(
-        """async () => {
+        """async (uploadId) => {
             const h = {};
             if (window.dummyUser) h['x-dummy-user'] = window.dummyUser;
             if (window.idToken)   h['Authorization'] = 'Bearer ' + window.idToken;
-            const r = await fetch('/files/abc123/download', { headers: h });
+            const r = await fetch(`/files/${uploadId}/download`, { headers: h });
             return { status: r.status, body: await r.json() };
-        }"""
+        }""",
+        upload_id,
     )
     assert dl_res["status"] == 200
     assert dl_res["body"]["downloadUrl"], "download response must contain downloadUrl"

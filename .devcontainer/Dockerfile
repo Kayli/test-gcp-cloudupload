@@ -27,14 +27,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Create a directory for mounting secrets (service account key)
 RUN mkdir -p /workspaces/.secrets && chown vscode:vscode /workspaces/.secrets
 
-# Install Docker CLI (uses host Docker daemon via mounted socket)
-RUN set -eux; \
-  curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg; \
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" \
-    > /etc/apt/sources.list.d/docker.list; \
-  apt-get update; \
-  apt-get install -y --no-install-recommends docker-ce-cli docker-buildx-plugin docker-compose-plugin; \
-  rm -rf /var/lib/apt/lists/*;
+# NOTE: Docker CLI + daemon are installed by the docker-in-docker devcontainer
+# feature declared in devcontainer.json — no manual install needed here.
 
 # Install GitHub CLI (gh)
 RUN set -eux; \

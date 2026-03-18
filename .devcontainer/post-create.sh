@@ -12,43 +12,6 @@ if [ -f ".devcontainer/.env" ]; then
   echo "Sourced and exported .devcontainer/.env"
 fi
 
-# If Docker socket is mounted, create a group matching its GID and add the `vscode` user to it
-if [ -S /var/run/docker.sock ]; then
-  echo "Found docker socket at /var/run/docker.sock"
-  DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)
-  echo "Docker socket GID: $DOCKER_GID"
-
-  # See if a group already has this GID
-  EXISTING_GROUP=$(getent group | awk -F: -v gid="$DOCKER_GID" '$3==gid {print $1; exit}')
-  if [ -n "$EXISTING_GROUP" ]; then
-    echo "Group with GID $DOCKER_GID already exists: $EXISTING_GROUP"
-    GROUP_NAME="$EXISTING_GROUP"
-  else
-    GROUP_NAME="dockerhost"
-    # Avoid clobbering an existing group name
-    if getent group "$GROUP_NAME" >/dev/null 2>&1; then
-      GROUP_NAME="${GROUP_NAME}_$DOCKER_GID"
-    fi
-    echo "Creating group $GROUP_NAME with GID $DOCKER_GID"
-      if command -v sudo >/dev/null 2>&1; then
-        sudo groupadd -g "$DOCKER_GID" "$GROUP_NAME"
-      else
-        groupadd -g "$DOCKER_GID" "$GROUP_NAME"
-      fi
-  fi
-
-  echo "Adding user 'vscode' to group $GROUP_NAME"
-  if command -v sudo >/dev/null 2>&1; then
-    sudo usermod -aG "$GROUP_NAME" vscode
-  else
-    usermod -aG "$GROUP_NAME" vscode
-  fi
-
-  echo "Current groups for 'vscode': $(id -nG vscode)"
-else
-  echo "No docker socket found at /var/run/docker.sock; skipping docker group setup."
-fi
-
 # Existing GCP credentials hint
 if [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] && [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
   echo "Found GOOGLE_APPLICATION_CREDENTIALS at $GOOGLE_APPLICATION_CREDENTIALS"
