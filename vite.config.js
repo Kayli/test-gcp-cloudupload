@@ -8,7 +8,7 @@ const API_URL   = process.env.API_URL   || 'http://localhost:3000'
 const MINIO_URL = process.env.MINIO_URL || 'http://localhost:9000'
 
 export default defineConfig({
-  root: 'client',
+  root: 'frontend',
   plugins: [react()],
   server: {
     host: '0.0.0.0',  // bind to all interfaces so the port is reachable from the host

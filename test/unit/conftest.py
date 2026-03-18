@@ -14,7 +14,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):
     """Point src.db at a fresh temporary database for each test."""
-    import src.db as db_module
+    import backend.db as db_module
 
     db_path = tmp_path / "test.db"
     monkeypatch.setattr(db_module, "DB_PATH", db_path)

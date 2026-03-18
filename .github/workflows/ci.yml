@@ -23,7 +23,7 @@ jobs:
       - name: Install JS dependencies
         run: npm ci
 
-      - name: Build client
+      - name: Build frontend
         run: npm run build
 
       # Install Python + Playwright on the host runner so pytest and the browser

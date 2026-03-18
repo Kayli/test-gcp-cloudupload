@@ -1,5 +1,5 @@
 """
-Unit tests for src/db.py.
+Unit tests for backend/db.py.
 
 No server, no network — each test gets an isolated in-memory SQLite file
 via the isolated_db fixture in conftest.py.
@@ -7,7 +7,7 @@ via the isolated_db fixture in conftest.py.
 
 import pytest
 
-from src.db import complete_upload, get_file, insert_upload, list_files
+from backend.db import complete_upload, get_file, insert_upload, list_files
 
 
 def _insert(**kwargs: object) -> None:

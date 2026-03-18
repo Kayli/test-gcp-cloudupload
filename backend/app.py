@@ -15,8 +15,8 @@ from pydantic import BaseModel
 import google.oauth2.id_token
 import google.auth.transport.requests
 
-from src.storage import get_storage
-from src.db import complete_upload as db_complete_upload, get_file, insert_upload, list_files
+from backend.storage import get_storage
+from backend.db import complete_upload as db_complete_upload, get_file, insert_upload, list_files
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
