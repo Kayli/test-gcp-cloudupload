@@ -40,9 +40,9 @@ read -r -p "Type 'delete everything' to confirm: " confirm
 [[ "$confirm" == "delete everything" ]] || { warn "Aborted."; exit 0; }
 
 # ── Step 1: run suspend-and-teardown (handles everything except SQL + uploads) ─
-log "Running suspend-and-teardown.sh…"
+log "Running deploy-suspend.sh…"
 # Pass "yes" automatically since we already confirmed above
-echo "yes" | bash "$REPO_ROOT/scripts/suspend-and-teardown.sh"
+echo "yes" | bash "$REPO_ROOT/scripts/deploy-suspend.sh"
 
 # ── Step 2: delete uploads bucket ─────────────────────────────────────────────
 log "Deleting uploads bucket gs://${PROJECT_ID}-docstore-uploads…"

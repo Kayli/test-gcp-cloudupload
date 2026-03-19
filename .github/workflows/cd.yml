@@ -1,16 +1,7 @@
 name: CD — Deploy to GCP
 
-# Runs only on pushes to main AFTER CI has already passed (branch protection
-# should require the CI workflow to succeed before merging).
 on:
-  push:
-    branches: [main]
-
-# Cancel any in-flight deployment for the same branch so only the latest
-# commit on main is ever live.
-concurrency:
-  group: cd-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_dispatch:
 
 jobs:
   deploy:
