@@ -12,14 +12,25 @@ if [ -f ".devcontainer/.env" ]; then
   echo "Sourced and exported .devcontainer/.env"
 fi
 
-# Existing GCP credentials hint
-if [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] && [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
-  echo "Found GOOGLE_APPLICATION_CREDENTIALS at $GOOGLE_APPLICATION_CREDENTIALS"
-  echo "Run: gcloud auth activate-service-account --key-file=\$GOOGLE_APPLICATION_CREDENTIALS"
+# Activate GCP credentials if the service-account key is present
+SA_KEY="${GOOGLE_APPLICATION_CREDENTIALS:-/workspaces/.secrets/gcp-sa-key.json}"
+if [ -f "$SA_KEY" ]; then
+  echo "Activating GCP service account from $SA_KEY"
+  gcloud auth activate-service-account --key-file="$SA_KEY" --quiet
+
+  PROJECT_ID="$(python3 -c "import json; d=json.load(open('$SA_KEY')); print(d['project_id'])")"
+  gcloud config set project "$PROJECT_ID" --quiet
+  echo "Active project: $PROJECT_ID"
+
+  # Authenticate Docker to push/pull from Artifact Registry in all common regions.
+  # Add more region prefixes here if you deploy outside us-central1.
+  for region in us-central1 us-east1 europe-west1 asia-east1; do
+    gcloud auth configure-docker "${region}-docker.pkg.dev" --quiet 2>/dev/null || true
+  done
+  echo "Docker configured for Artifact Registry."
 else
-  echo "⚠️  WARNING: No GCP credentials found at ${GOOGLE_APPLICATION_CREDENTIALS:-<unset>}"
-  echo "   To enable gcloud auth, place your service-account key at /workspaces/.secrets/gcloud-key"
-  echo "   and re-open the devcontainer (or mount your secrets)."
+  echo "⚠️  WARNING: No GCP credentials found at $SA_KEY"
+  echo "   Place your service-account key there and run: bash .devcontainer/post-create.sh"
 fi
 
 echo "Dependency installation moved to Dockerfile build (uses pyproject.toml + uv)."

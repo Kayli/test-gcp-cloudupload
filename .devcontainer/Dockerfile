@@ -40,6 +40,37 @@ RUN set -eux; \
   apt-get install -y --no-install-recommends gh; \
   rm -rf /var/lib/apt/lists/*;
 
+# Install Google Cloud SDK (gcloud, gsutil, bq) via tarball.
+# The APT package requires python3 >= 3.10 from the Debian repo, but bullseye
+# only ships 3.9 there (our Python 3.11 was installed outside APT).
+# The tarball bundles its own Python so there is no version conflict.
+RUN set -eux; \
+  ARCH=$(dpkg --print-architecture); \
+  case "$ARCH" in \
+    amd64) GC_ARCH="x86_64" ;; \
+    arm64) GC_ARCH="arm"    ;; \
+    *)     echo "Unsupported arch: $ARCH" >&2; exit 1 ;; \
+  esac; \
+  curl -fsSL \
+    "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${GC_ARCH}.tar.gz" \
+    -o /tmp/google-cloud-sdk.tar.gz; \
+  tar -xzf /tmp/google-cloud-sdk.tar.gz -C /usr/local/; \
+  /usr/local/google-cloud-sdk/install.sh --quiet --path-update false --command-completion false; \
+  ln -sf /usr/local/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud; \
+  ln -sf /usr/local/google-cloud-sdk/bin/gsutil /usr/local/bin/gsutil; \
+  ln -sf /usr/local/google-cloud-sdk/bin/bq     /usr/local/bin/bq; \
+  rm /tmp/google-cloud-sdk.tar.gz;
+
+# Install Terraform
+RUN set -eux; \
+  curl -fsSL https://apt.releases.hashicorp.com/gpg \
+    | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg; \
+  echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" \
+    > /etc/apt/sources.list.d/hashicorp.list; \
+  apt-get update; \
+  apt-get install -y --no-install-recommends terraform; \
+  rm -rf /var/lib/apt/lists/*;
+
 # Install Dev Containers CLI via npm (only distribution channel available)
 # Install Node.js LTS from NodeSource, use it to install the CLI globally, then
 # expose the devcontainer binary on PATH without keeping a full Node.js environment.
