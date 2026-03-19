@@ -1,14 +1,12 @@
 import os
 import re
 import uuid
-from pathlib import Path
 from typing import Any, Optional, cast
 from urllib.parse import quote
 
 from fastapi import Body, FastAPI, HTTPException, Depends, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -18,9 +16,6 @@ import google.auth.transport.requests
 from backend.storage import get_storage
 from backend.db import complete_upload as db_complete_upload, get_file, insert_upload, list_files
 
-
-BASE_DIR = Path(__file__).resolve().parents[1]
-public_candidate = BASE_DIR / "public"
 
 app = FastAPI(title="FastAPI host + API (replica)")
 
@@ -207,6 +202,3 @@ async def list_user_files(
     ]
     return {"files": files}
 
-
-# Serve static UI last so all API routes above take priority
-app.mount("/", StaticFiles(directory=public_candidate, html=True), name="public")

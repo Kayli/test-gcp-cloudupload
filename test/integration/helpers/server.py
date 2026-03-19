@@ -18,7 +18,7 @@ from pathlib import Path
 
 # ── configuration ─────────────────────────────────────────────────────────────
 
-APP_URL: str = os.getenv("APP_URL", "http://localhost:3000")
+APP_URL: str = os.getenv("APP_URL", "http://localhost:5173")
 
 # Workspace root: three levels above this file (test/integration/helpers/server.py)
 _WORKSPACE_ROOT: str = os.getenv("SERVER_CWD") or str(Path(__file__).resolve().parents[3])
@@ -63,44 +63,33 @@ def ensure_server() -> None:
     """
     global _we_started_compose
 
-    # Tests PUT directly to MinIO (port 9000), not via the Vite proxy (5173).
-    # Always restart just the api service with the test-appropriate value so
-    # that presigned URLs are reachable from within the devcontainer regardless
-    # of how compose was originally started.
-    test_env = os.environ.copy()
-    test_env["MINIO_PUBLIC_URL"] = "http://localhost:9000"
+    # All tests (browser and API-level) route through the Vite dev server at
+    # :5173.  MINIO_PUBLIC_URL must therefore point to :5173 so presigned
+    # MinIO URLs are reachable by both the browser and the test runner.
+    compose_env = os.environ.copy()
+    compose_env["MINIO_PUBLIC_URL"] = "http://localhost:5173"
 
     if _is_server_up_now():
-        print("[server] App server already running — restarting api with test MINIO_PUBLIC_URL.")
-        subprocess.run(
-            ["docker", "compose", "up", "-d", "--no-deps", "api"],
-            cwd=_WORKSPACE_ROOT,
-            env=test_env,
-            check=True,
-        )
-        if not is_server_up(timeout_secs=15.0):
-            raise RuntimeError("App server did not become healthy after restart")
+        print("[server] Stack already running — no-op.")
         return
 
     print(f"[server] Starting compose stack from {_WORKSPACE_ROOT} …")
     subprocess.run(
-        ["docker", "compose", "up", "-d", "--wait", "api"],
+        ["docker", "compose", "up", "-d", "--wait"],
         cwd=_WORKSPACE_ROOT,
-        env=test_env,
+        env=compose_env,
         check=True,
     )
     _we_started_compose = True
 
-    if not is_server_up(timeout_secs=15.0):
-        raise RuntimeError("App server did not become healthy within 15 s after compose up")
+    if not is_server_up(timeout_secs=30.0):
+        raise RuntimeError("Stack did not become healthy within 30 s after compose up")
 
     print("[server] Compose stack ready.")
 
 
 def stop_server() -> None:
-    """Tear down the compose stack — only if this session started it.
-    If the server was already running when tests began, restore it to the
-    browser-facing MINIO_PUBLIC_URL (http://localhost:5173)."""
+    """Tear down the compose stack — only if this session started it."""
     global _we_started_compose
     if _we_started_compose:
         print("[server] Stopping compose stack …")
@@ -112,15 +101,4 @@ def stop_server() -> None:
         _we_started_compose = False
         print("[server] Compose stack stopped.")
     else:
-        # Restore the api to browser-facing presigned URLs.
-        # Use --no-deps so only the api container is restarted, leaving
-        # minio and ui untouched.
-        browser_env = os.environ.copy()
-        browser_env["MINIO_PUBLIC_URL"] = os.getenv("UI_URL", "http://localhost:5173")
-        subprocess.run(
-            ["docker", "compose", "up", "-d", "--no-deps", "api"],
-            cwd=_WORKSPACE_ROOT,
-            env=browser_env,
-            check=False,
-        )
-        print("[server] Restored api to browser-facing MINIO_PUBLIC_URL.")
+        print("[server] Stack was pre-existing — leaving it running.")

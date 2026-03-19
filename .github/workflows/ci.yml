@@ -47,10 +47,8 @@ jobs:
       # Spin up the full compose stack — identical to local `docker compose up`.
       # --wait blocks until every service with a healthcheck passes.
       # Vars that would normally come from .devcontainer/.env are injected here.
-      # MINIO_PUBLIC_URL=http://localhost:5173 so presigned URLs are routed
-      # through the Vite proxy (port 5173 is mapped to the host runner);
-      # ensure_server() overrides it to localhost:9000 for the API-level upload
-      # tests, and browser_minio_url restores it to 5173 for the UI test.
+      # MINIO_PUBLIC_URL=http://localhost:5173 routes presigned URLs through the
+      # Vite proxy (port 5173 is mapped to the host runner).
       - name: Start services
         env:
           ALLOW_DEV_AUTH: '1'
@@ -64,8 +62,8 @@ jobs:
       - name: Test
         env:
           ALLOW_DEV_AUTH: '1'
-          APP_URL: 'http://localhost:3000'
-          UI_URL: 'http://localhost:5173'
+          # All tests go through the Vite dev server at :5173.
+          APP_URL: 'http://localhost:5173'
           # Headless Chromium on the runner — no host Chrome to connect to via CDP.
           USE_HOST_BROWSER: '0'
           # Point tests at the Postgres exposed by the compose stack.
