@@ -56,9 +56,10 @@ RUN set -eux; \
     -o /tmp/google-cloud-sdk.tar.gz; \
   tar -xzf /tmp/google-cloud-sdk.tar.gz -C /usr/local/; \
   /usr/local/google-cloud-sdk/install.sh --quiet --path-update false --command-completion false; \
-  ln -sf /usr/local/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud; \
-  ln -sf /usr/local/google-cloud-sdk/bin/gsutil /usr/local/bin/gsutil; \
-  ln -sf /usr/local/google-cloud-sdk/bin/bq     /usr/local/bin/bq; \
+  ln -sf /usr/local/google-cloud-sdk/bin/gcloud  /usr/local/bin/gcloud; \
+  ln -sf /usr/local/google-cloud-sdk/bin/gsutil  /usr/local/bin/gsutil; \
+  ln -sf /usr/local/google-cloud-sdk/bin/bq      /usr/local/bin/bq; \
+  ln -sf /usr/local/google-cloud-sdk/bin/docker-credential-gcloud /usr/local/bin/docker-credential-gcloud; \
   rm /tmp/google-cloud-sdk.tar.gz;
 
 # Install Terraform
