@@ -122,12 +122,59 @@ class MinioStorage:
 # ── GCS ───────────────────────────────────────────────────────────────────────
 
 class GcsStorage:
-    """Google Cloud Storage using v4 signed URLs."""
+    """Google Cloud Storage using v4 signed URLs.
+
+    On Cloud Run / GCE the default credentials are short-lived tokens with no
+    private key, so blob.generate_signed_url() fails with "you need a private
+    key".  We work around this by building an IAM-backed signer: the Cloud Run
+    service account calls the IAM SignBlob API on behalf of itself, which works
+    as long as it has roles/iam.serviceAccountTokenCreator on itself (granted in
+    wif.tf via google_service_account_iam_member.api_self_sign).
+    """
 
     def __init__(self) -> None:
+        import google.auth  # type: ignore[import]
+        import google.auth.transport.requests  # type: ignore[import]
+        from google.auth import iam as google_iam  # type: ignore[import]
+        from google.oauth2 import service_account  # type: ignore[import]
         from google.cloud import storage as gcs  # type: ignore[import]
 
-        self._client = gcs.Client()
+        _GCS_SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]
+
+        credentials, _ = google.auth.default(scopes=_GCS_SCOPES)
+
+        # Detect token-only credentials (Compute Engine / Cloud Run metadata
+        # server) and replace them with IAM-backed signing credentials.
+        if not getattr(credentials, "service_account_email", None) or \
+                getattr(credentials, "_signer", None) is None:
+            # Resolve the SA email: env var wins, then ADC attribute, then
+            # the GCE metadata server.
+            sa_email = os.getenv("GCS_SERVICE_ACCOUNT", "") or \
+                       getattr(credentials, "service_account_email", "")
+            if not sa_email:
+                import urllib.request
+                _meta_url = (
+                    "http://metadata.google.internal/computeMetadata/v1"
+                    "/instance/service-accounts/default/email"
+                )
+                req = urllib.request.Request(
+                    _meta_url, headers={"Metadata-Flavor": "Google"}
+                )
+                with urllib.request.urlopen(req, timeout=2) as resp:
+                    sa_email = resp.read().decode()
+
+            auth_req = google.auth.transport.requests.Request()
+            credentials.refresh(auth_req)
+
+            signer = google_iam.Signer(auth_req, credentials, sa_email)
+            credentials = service_account.Credentials(
+                signer=signer,
+                service_account_email=sa_email,
+                token_uri="https://oauth2.googleapis.com/token",
+                scopes=_GCS_SCOPES,
+            )
+
+        self._client = gcs.Client(credentials=credentials)
         self._bucket = self._client.bucket(GCS_BUCKET)
 
     def ensure_bucket(self) -> None:
