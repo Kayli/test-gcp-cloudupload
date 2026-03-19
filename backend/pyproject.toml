@@ -6,19 +6,30 @@ readme = "README.md"
 requires-python = ">=3.8"
 
 dependencies = [
+  # ── API runtime ─────────────────────────────────────────────────────
   "fastapi>=0.95.0",
   "uvicorn[standard]>=0.20.0",
   "aiofiles>=23.1.0",
   "python-multipart>=0.0.6",
-  "playwright>=1.35.0",
   "google-auth>=2.20.0",
   "requests>=2.28.0",
   # object storage
   "boto3>=1.28.0",               # MinIO (S3-compatible) presigned URLs — dev
   "google-cloud-storage>=2.10.0", # GCS signed URLs — prod
-  # test runner + browser automation
+  # database
+  "psycopg2-binary>=2.9.0",      # PostgreSQL driver — prod (Cloud SQL)
+]
+
+[project.optional-dependencies]
+# Install with: pip install './backend[test]'
+# Used by: Dockerfile.api (dev container), CI pipeline.
+# NOT installed in the production image (Dockerfile.prod).
+test = [
   "pytest>=7.4.0",
   "pytest-playwright>=0.4.3",
+  "playwright>=1.35.0",
+  "anyio>=4.0.0",
+  "pytest-anyio>=0.0.0",
 ]
 
 [tool.uv]

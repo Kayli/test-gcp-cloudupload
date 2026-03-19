@@ -116,7 +116,7 @@ def stop_server() -> None:
         # Use --no-deps so only the api container is restarted, leaving
         # minio and ui untouched.
         browser_env = os.environ.copy()
-        browser_env["MINIO_PUBLIC_URL"] = "http://localhost:5173"
+        browser_env["MINIO_PUBLIC_URL"] = os.getenv("UI_URL", "http://localhost:5173")
         subprocess.run(
             ["docker", "compose", "up", "-d", "--no-deps", "api"],
             cwd=_WORKSPACE_ROOT,

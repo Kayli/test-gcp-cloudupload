@@ -57,20 +57,21 @@ services:
       - path: .devcontainer/.env   # provides GOOGLE_OAUTH_CLIENT_ID and GCS_BUCKET etc.
         required: false            # file is absent in CI; all vars have safe defaults
     environment:
-      ALLOW_DEV_AUTH: "1"
-      # MinIO reachable by service name inside Docker
-      MINIO_ENDPOINT:    http://minio:9000
-      # Presigned URLs must point to wherever the client can actually reach MinIO.
-      # Default: the Vite dev server proxy (for full `docker compose up` with browser).
-      # Override by setting MINIO_PUBLIC_URL in the environment before running compose,
-      # e.g. when running tests without Vite: MINIO_PUBLIC_URL=http://localhost:9000
-      MINIO_PUBLIC_URL:  ${MINIO_PUBLIC_URL:-http://localhost:5173}
-      MINIO_BUCKET:      objstore
-      MINIO_ACCESS_KEY:  minioadmin
-      MINIO_SECRET_KEY:  minioadmin
+      # ── compose-internal overrides ────────────────────────────────────────
+      # These two values differ from the host-side equivalents in .env because
+      # inside the compose network services are reached by their service name,
+      # not by localhost.  Everything else comes from env_file (.devcontainer/.env).
+      MINIO_ENDPOINT: http://minio:9000
+      DATABASE_URL: postgresql://docstore:docstore@postgres:5432/docstore
+      # MINIO_PUBLIC_URL has no default here — it MUST be set in .env.
+      # Local dev: http://localhost:5173 (Vite proxy)
+      # Tests:     http://localhost:9000 (direct MinIO, set by server.py / CI)
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL}
     depends_on:
-     minio:
-        condition: service_healthy 
+      minio:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 10s
@@ -101,7 +102,28 @@ services:
       start_period: 2s
       start_interval: 2s
 
+  # ── PostgreSQL metadata store ────────────────────────────────────────────────
+  # Exposed on host port 5432 so that `pytest` running in the devcontainer can
+  # connect directly (set DATABASE_URL=postgresql://docstore:docstore@localhost:5432/docstore).
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB:       docstore
+      POSTGRES_USER:     docstore
+      POSTGRES_PASSWORD: docstore
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docstore -d docstore"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
 volumes:
   minio_data:
   api_data:
   ui_node_modules:
+  pg_data:

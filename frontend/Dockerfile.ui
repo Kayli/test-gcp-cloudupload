@@ -1,15 +1,39 @@
-# Vite dev server image.
-# node_modules are installed during the image build and kept in an anonymous
-# volume so they are never shadowed by a host bind-mount.
-# Source code is bind-mounted at runtime for HMR hot-reload.
+# ── Frontend image — dual dev / production mode ───────────────────────────────
+#
+# NODE_ENV=development  (default, used by docker compose)
+#   Runs the Vite HMR dev server.  Source is bind-mounted at /app by compose
+#   so every save triggers a live reload.  node_modules live in an anonymous
+#   volume so they are never shadowed by the host directory.
+#
+# NODE_ENV=production
+#   Builds the React app with `vite build`, then serves the static output
+#   with the lightweight `serve` package.  Useful for smoke-testing the
+#   production bundle locally, or deploying the UI as a standalone service.
+#
+#   Note: the full Cloud Run deployment uses backend/Dockerfile.prod instead,
+#   which bakes the built frontend directly into the Python image so a single
+#   container serves both the API and the static assets.
 
-FROM node:18-slim
+FROM node:20-slim
 
 WORKDIR /app
 
-# Install deps first for layer caching — only re-runs when lockfile changes
+# Install JS dependencies — dedicated layer so it is rebuilt only when the
+# lockfile changes, not on every source edit.
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
-# Source is bind-mounted by docker-compose
-CMD ["npx", "vite", "--host", "--config", "frontend/vite.config.js"]
+# `serve` is the lightweight static-file server used in production mode.
+RUN npm install -g serve
+
+# Copy frontend source so production builds work without a bind mount.
+# In development, docker compose bind-mounts the workspace root at /app, so
+# these layers are replaced by the live source — HMR works as expected.
+COPY frontend/ ./frontend/
+
+COPY frontend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+EXPOSE 5173
+
+ENTRYPOINT ["docker-entrypoint.sh"]

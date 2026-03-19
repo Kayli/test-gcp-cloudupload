@@ -25,10 +25,12 @@ import os
 import socket
 from urllib.parse import urlparse
 
+import subprocess
+
 import pytest
 from playwright.sync_api import Playwright
 
-from helpers.server import APP_URL, ensure_server, stop_server
+from helpers.server import APP_URL, _WORKSPACE_ROOT, ensure_server, is_server_up, stop_server
 
 # ── env switches ──────────────────────────────────────────────────────────────
 
@@ -107,6 +109,36 @@ def browser(playwright: Playwright):  # type: ignore[override]
         b = playwright.chromium.launch(headless=True)
         yield b
         b.close()
+
+
+# ── MINIO_PUBLIC_URL switcher ────────────────────────────────────────────────
+
+
+@pytest.fixture()
+def browser_minio_url():
+    """
+    Restart the api with MINIO_PUBLIC_URL=UI_URL so presigned URLs are
+    reachable from the host browser (which cannot reach minio:9000 under DinD).
+    Restored to http://localhost:9000 on teardown so the non-UI upload tests
+    (which run inside the devcontainer and PUT directly to MinIO) still work.
+    """
+    ui_url = os.getenv("UI_URL", "http://localhost:5173")
+
+    def _restart(minio_public_url: str) -> None:
+        env = os.environ.copy()
+        env["MINIO_PUBLIC_URL"] = minio_public_url
+        subprocess.run(
+            ["docker", "compose", "up", "-d", "--no-deps", "api"],
+            cwd=_WORKSPACE_ROOT,
+            env=env,
+            check=True,
+        )
+        if not is_server_up(timeout_secs=15.0):
+            raise RuntimeError(f"API did not recover after setting MINIO_PUBLIC_URL={minio_public_url}")
+
+    _restart(ui_url)
+    yield
+    _restart("http://localhost:9000")
 
 
 # ── API request context fixture ───────────────────────────────────────────────

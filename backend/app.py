@@ -24,9 +24,14 @@ public_candidate = BASE_DIR / "public"
 
 app = FastAPI(title="FastAPI host + API (replica)")
 
+# Comma-separated list of allowed CORS origins.
+# Default "*" works for dev / test.  In prod set this to the Cloud Run URL:
+#   CORS_ORIGINS=https://docstore-api-xxxxxxxxxx-uc.a.run.app
+_CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

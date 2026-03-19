@@ -13,6 +13,7 @@ WORKDIR /app
 # Copy only the project metadata so this layer is cached independently of
 # source code changes — rebuilt only when dependencies actually change.
 COPY backend/pyproject.toml ./backend/pyproject.toml
+# Runtime deps only — pytest/playwright run on the host, not inside this container.
 RUN pip install --no-cache-dir ./backend
 
 # Source is bind-mounted by docker-compose; this CMD runs from /app (repo root)

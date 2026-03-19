@@ -36,7 +36,7 @@ jobs:
           cache: 'pip'
 
       - name: Install Python dependencies
-        run: pip install ./backend
+        run: pip install "./backend[test]"
 
       - name: Get installed Playwright version
         id: playwright-version
@@ -65,7 +65,12 @@ jobs:
       # The integration tests detect the server is already up and skip auto-start.
       - name: Start services
         env:
+          # Vars that would normally come from .devcontainer/.env (absent in CI).
+          ALLOW_DEV_AUTH: '1'
           MINIO_PUBLIC_URL: http://localhost:9000
+          MINIO_BUCKET: objstore
+          MINIO_ACCESS_KEY: minioadmin
+          MINIO_SECRET_KEY: minioadmin
         run: |
           docker compose up -d --wait api
 
@@ -73,6 +78,9 @@ jobs:
         env:
           ALLOW_DEV_AUTH: '1'
           APP_URL: 'http://localhost:3000'
+          # Point unit tests at the Postgres exposed by the compose stack.
+          # db.py selects the PG backend automatically when DATABASE_URL is set.
+          DATABASE_URL: 'postgresql://docstore:docstore@localhost:5432/docstore'
         run: pytest -v
 
       - name: Stop services

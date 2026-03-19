@@ -6,9 +6,17 @@ then drives the upload and download flows via page.evaluate() so the
 browser's own fetch() carries the auth headers set by the JS app.
 """
 
+import os
+
 from playwright.sync_api import Page
 
 from helpers.server import APP_URL
+
+# The Vite dev server — the URL a real user opens in their browser.
+# All existing tests bypass Vite and talk to the API directly (APP_URL / :3000).
+# Tests below that use UI_URL exercise the full browser path including the
+# Vite proxy (/uploads → api:3000, /objstore → minio:9000).
+UI_URL: str = os.getenv("UI_URL", "http://localhost:5173")
 
 
 def test_ui_integration_flows(page: Page) -> None:
@@ -184,4 +192,60 @@ def test_dashboard_visible_after_login_and_shows_uploaded_file(page: Page) -> No
     )
     assert "complete" in dashboard_text.lower(), (
         "dashboard must show 'complete' status for the finished upload"
+    )
+
+
+def test_file_upload_via_vite_proxy(page: Page, browser_minio_url) -> None:
+    """
+    End-to-end upload driven through the Vite dev server at :5173.
+
+    This test exercises the full browser UX path that a real user takes:
+
+      1. Browser opens the Vite dev server (UI_URL / :5173).
+      2. User signs in via the dev fake-login button.
+      3. User picks a file — triggers Uploader.jsx handleFileChange().
+      4. JS POSTs to /uploads  →  Vite proxy  →  api:3000   (gets presigned URL)
+      5. JS PUTs bytes to the presigned URL  →  localhost:5173/objstore/…
+                                              →  Vite proxy  →  minio:9000
+      6. JS POSTs to /uploads/:id/complete  →  Vite proxy  →  api:3000
+      7. #upload-result shows "Upload complete ✓"
+
+    CURRENTLY FAILS at step 5 with "Upload failed: 404 Not Found"
+    because the PUT to the presigned MinIO URL (proxied through Vite
+    at /objstore/…) returns 404.  The API-level tests (test_uploads.py)
+    never go through the Vite proxy so they do not catch this regression.
+    """
+    page.goto(UI_URL)
+    page.wait_for_load_state("domcontentloaded")
+
+    # Sign in via the dev fake-login button so auth headers are set.
+    page.click("#fake-login")
+    page.wait_for_selector("#uploader")
+
+    # Inject a small synthetic file directly into the hidden <input type="file">.
+    # set_input_files() triggers the onChange handler in Uploader.jsx exactly
+    # as if the user had picked the file through the native OS file picker.
+    page.set_input_files(
+        "#file-input",
+        files=[{"name": "e2e-test.txt", "mimeType": "text/plain", "buffer": b"e2e upload payload"}],
+    )
+
+    # Wait for the upload flow to settle — the result cycles through several
+    # intermediate states before landing on a final success or failure message.
+    page.wait_for_function(
+        """() => {
+            const txt = document.getElementById('upload-result')?.innerText ?? '';
+            return txt !== ''
+                && txt !== 'Requesting upload URL\u2026'
+                && txt !== 'Uploading directly to storage\u2026'
+                && txt !== 'Registering upload\u2026';
+        }""",
+        timeout=15_000,
+    )
+
+    result_text = page.inner_text("#upload-result")
+
+    assert "Upload complete" in result_text, (
+        f"Expected upload to succeed end-to-end via the Vite proxy, "
+        f"but #upload-result shows: {result_text!r}"
     )
