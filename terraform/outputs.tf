@@ -37,3 +37,13 @@ output "image_repo" {
   value       = local.image_repo
   description = "Artifact Registry Docker repo URL (prefix for image tags)"
 }
+
+output "workload_identity_provider" {
+  value       = google_iam_workload_identity_pool_provider.github.name
+  description = "Full WIF provider resource name — set as GCP_WIF_PROVIDER GitHub secret"
+}
+
+output "deployer_service_account" {
+  value       = google_service_account.deployer.email
+  description = "Deployer SA email — set as GCP_SA_EMAIL GitHub secret"
+}

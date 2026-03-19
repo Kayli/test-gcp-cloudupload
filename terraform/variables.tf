@@ -49,3 +49,8 @@ variable "deletion_protection" {
   type        = bool
   default     = true
 }
+
+variable "github_repo" {
+  description = "GitHub repository in 'owner/repo' format (e.g. acme/docstore). Scopes Workload Identity Federation tokens so only this repo can impersonate the deployer service account."
+  type        = string
+}

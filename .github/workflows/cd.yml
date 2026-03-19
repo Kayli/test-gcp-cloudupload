@@ -1,4 +1,4 @@
-name: CD — Deploy to Cloud Run
+name: CD — Deploy to GCP
 
 # Runs only on pushes to main AFTER CI has already passed (branch protection
 # should require the CI workflow to succeed before merging).
@@ -24,20 +24,20 @@ jobs:
       id-token: write
 
     env:
-      # Must match `terraform output cloud_run_service_name`
-      GCP_SERVICE:  docstore-api
-      GCP_REGION:   us-central1
+      GCP_SERVICE: docstore-api
+      GCP_REGION:  us-central1
 
     steps:
       - uses: actions/checkout@v4
 
       # ── GCP authentication via Workload Identity Federation ─────────────────
-      # Required GitHub repository secrets (Settings → Secrets → Actions):
+      # Required GitHub Secrets (Settings → Secrets and variables → Actions):
       #   GCP_WIF_PROVIDER  — from `terraform output workload_identity_provider`
       #   GCP_SA_EMAIL      — from `terraform output deployer_service_account`
-      # Required GitHub repository variables (Settings → Variables → Actions):
+      # Required GitHub Variables (Settings → Secrets and variables → Actions):
       #   GCP_PROJECT_ID    — your GCP project ID
       #   GCP_IMAGE_REPO    — from `terraform output image_repo`
+      #   GCP_UI_BUCKET     — from `terraform output gcs_ui_bucket`
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
@@ -50,51 +50,91 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
 
-      # ── Build and push the production image ──────────────────────────────────
-      # backend/Dockerfile.prod is a multi-stage build:
-      #   Stage 1 (node:20)   — builds the React/Vite frontend
-      #   Stage 2 (python:3.11-slim) — installs FastAPI deps + baked-in assets
-      - name: Build and push container image
+      # Get the live Cloud Run URL early — it is stable across deploys (assigned
+      # once at service creation by Terraform) and must be baked into the UI
+      # bundle as VITE_API_URL before the Vite build runs.
+      - name: Get Cloud Run URL
+        id: cloud-run-url
+        run: |
+          URL=$(gcloud run services describe ${{ env.GCP_SERVICE }} \
+            --region  "${{ env.GCP_REGION }}" \
+            --project "${{ vars.GCP_PROJECT_ID }}" \
+            --format  "value(status.url)")
+          echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "API URL: $URL"
+
+      # ── API ───────────────────────────────────────────────────────────────────
+      - name: Build and push API image
         env:
-          IMAGE: ${{ vars.GCP_IMAGE_REPO }}/api:${{ github.sha }}
+          IMAGE:        ${{ vars.GCP_IMAGE_REPO }}/api:${{ github.sha }}
           IMAGE_LATEST: ${{ vars.GCP_IMAGE_REPO }}/api:latest
         run: |
           docker build \
-            --file backend/Dockerfile.prod \
-            --tag "$IMAGE" \
-            --tag "$IMAGE_LATEST" \
+            --file backend/Dockerfile.api \
+            --tag  "$IMAGE" \
+            --tag  "$IMAGE_LATEST" \
             --cache-from "$IMAGE_LATEST" \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --build-arg  BUILDKIT_INLINE_CACHE=1 \
             .
-
           docker push "$IMAGE"
           docker push "$IMAGE_LATEST"
 
-      # ── Deploy to Cloud Run ───────────────────────────────────────────────────
       # `gcloud run deploy` updates only the container image.  All other service
-      # configuration (env vars, secrets, scaling, Cloud SQL connection) is
-      # managed by Terraform and intentionally left untouched here.
-      - name: Deploy to Cloud Run
+      # configuration (env vars, secrets, scaling, Cloud SQL connection) is owned
+      # by Terraform and intentionally left untouched by this step.
+      - name: Deploy API to Cloud Run
         env:
           IMAGE: ${{ vars.GCP_IMAGE_REPO }}/api:${{ github.sha }}
         run: |
           gcloud run deploy ${{ env.GCP_SERVICE }} \
-            --image "$IMAGE" \
-            --region "${{ env.GCP_REGION }}" \
+            --image   "$IMAGE" \
+            --region  "${{ env.GCP_REGION }}" \
             --project "${{ vars.GCP_PROJECT_ID }}" \
             --quiet
 
-      # ── Smoke-test the live service ───────────────────────────────────────────
+      # ── UI ────────────────────────────────────────────────────────────────────
+      # Build the React bundle with VITE_API_URL baked in so all fetch() calls
+      # in the browser target the Cloud Run service directly (no proxy).
+      - name: Build UI bundle
+        run: |
+          docker build \
+            --file frontend/Dockerfile.ui \
+            --build-arg VITE_API_URL="${{ steps.cloud-run-url.outputs.url }}" \
+            --tag ui-build \
+            .
+
+      - name: Upload UI to GCS and invalidate CDN
+        run: |
+          # Extract the pre-built static files from the image.
+          docker create --name tmp-ui ui-build
+          mkdir -p ./public-dist
+          docker cp tmp-ui:/app/public/. ./public-dist/
+          docker rm tmp-ui
+
+          # Sync to GCS, removing any files deleted from the build.
+          gsutil -m rsync -R -d ./public-dist/ gs://${{ vars.GCP_UI_BUCKET }}/
+
+          # HTML pages must never be served stale; hashed asset files are immutable.
+          gsutil -m setmeta \
+            -h "Cache-Control:no-cache, no-store, must-revalidate" \
+            "gs://${{ vars.GCP_UI_BUCKET }}/**/*.html" 2>/dev/null || true
+          gsutil -m setmeta \
+            -h "Cache-Control:public, max-age=31536000, immutable" \
+            "gs://${{ vars.GCP_UI_BUCKET }}/assets/**" 2>/dev/null || true
+
+          # Purge the CDN edge cache so users immediately get the new index.html.
+          gcloud compute url-maps invalidate-cdn-cache docstore-ui \
+            --path    "/*" \
+            --project "${{ vars.GCP_PROJECT_ID }}" \
+            --async \
+            --quiet
+
+      # ── Smoke test ────────────────────────────────────────────────────────────
       - name: Smoke test — /health
         run: |
-          SERVICE_URL=$(gcloud run services describe ${{ env.GCP_SERVICE }} \
-            --region "${{ env.GCP_REGION }}" \
-            --project "${{ vars.GCP_PROJECT_ID }}" \
-            --format "value(status.url)")
-
+          SERVICE_URL="${{ steps.cloud-run-url.outputs.url }}"
           echo "Service URL: $SERVICE_URL"
 
-          # Retry up to 10 times (Cloud Run may need a moment to route traffic)
           for i in $(seq 1 10); do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$SERVICE_URL/health")
             if [ "$STATUS" = "200" ]; then

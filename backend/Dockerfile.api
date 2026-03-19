@@ -1,6 +1,13 @@
-# FastAPI development image.
-# Source code is NOT baked in — it is mounted at runtime via the compose
-# volume so that uvicorn --reload picks up every change instantly.
+# FastAPI image — shared between local dev and Cloud Run.
+#
+# Local dev (docker compose)
+#   Source is bind-mounted at /app so uvicorn --reload picks up every change
+#   instantly.  The COPY layer below is shadowed by the mount.
+#   docker-compose.yml passes `command: uvicorn ... --reload` to enable HMR.
+#
+# Production (Cloud Run)
+#   The bind mount is absent, so the COPY layer is the live source.
+#   No --reload flag — there are no file changes to watch.
 
 FROM python:3.11-slim
 
@@ -22,4 +29,4 @@ RUN pip install --no-cache-dir ./backend
 COPY backend/ ./backend/
 
 # Source is bind-mounted by docker-compose; this CMD runs from /app (repo root)
-CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "3000", "--reload"]
+CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "3000"]

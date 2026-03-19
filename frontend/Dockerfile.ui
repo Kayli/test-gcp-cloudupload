@@ -8,11 +8,9 @@
 # NODE_ENV=production
 #   Builds the React app with `vite build`, then serves the static output
 #   with the lightweight `serve` package.  Useful for smoke-testing the
-#   production bundle locally, or deploying the UI as a standalone service.
-#
-#   Note: the full Cloud Run deployment uses backend/Dockerfile.prod instead,
-#   which bakes the built frontend directly into the Python image so a single
-#   container serves both the API and the static assets.
+#   production bundle locally.  In the CD pipeline the built /app/public/
+#   directory is extracted from this image and uploaded to GCS to be served
+#   via the Cloud CDN load balancer (see terraform/cdn.tf).
 
 FROM node:20-slim
 

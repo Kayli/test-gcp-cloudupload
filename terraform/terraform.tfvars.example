@@ -18,3 +18,7 @@ db_password = "change-me-use-a-strong-random-password"
 
 # Set to false only when you want to run `terraform destroy`.
 # deletion_protection = true
+
+# GitHub repository used to scope Workload Identity Federation tokens.
+# Format: "owner/repo"  (no https://, no trailing slash)
+github_repo = "your-github-org/your-repo-name"
