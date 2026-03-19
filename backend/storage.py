@@ -151,7 +151,9 @@ class GcsStorage:
             # the GCE metadata server.
             sa_email = os.getenv("GCS_SERVICE_ACCOUNT", "") or \
                        getattr(credentials, "service_account_email", "")
-            if not sa_email:
+            # Compute Engine credentials expose "default" as a placeholder —
+            # treat it the same as missing and resolve via the metadata server.
+            if not sa_email or sa_email == "default":
                 import urllib.request
                 _meta_url = (
                     "http://metadata.google.internal/computeMetadata/v1"
