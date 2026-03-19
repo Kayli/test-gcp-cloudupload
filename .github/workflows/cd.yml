@@ -66,10 +66,11 @@ jobs:
       # ── API ───────────────────────────────────────────────────────────────────
       - name: Build and push API image
         env:
-          IMAGE:        ${{ vars.GCP_IMAGE_REPO }}/api:${{ github.sha }}
-          IMAGE_LATEST: ${{ vars.GCP_IMAGE_REPO }}/api:latest
+          IMAGE:        ${{ vars.GCP_IMAGE_REPO }}/docstore-api:${{ github.sha }}
+          IMAGE_LATEST: ${{ vars.GCP_IMAGE_REPO }}/docstore-api:latest
         run: |
           docker build \
+            --platform linux/amd64 \
             --file backend/Dockerfile.api \
             --tag  "$IMAGE" \
             --tag  "$IMAGE_LATEST" \
@@ -84,7 +85,7 @@ jobs:
       # by Terraform and intentionally left untouched by this step.
       - name: Deploy API to Cloud Run
         env:
-          IMAGE: ${{ vars.GCP_IMAGE_REPO }}/api:${{ github.sha }}
+          IMAGE: ${{ vars.GCP_IMAGE_REPO }}/docstore-api:${{ github.sha }}
         run: |
           gcloud run deploy ${{ env.GCP_SERVICE }} \
             --image   "$IMAGE" \
