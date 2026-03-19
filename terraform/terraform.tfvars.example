@@ -5,10 +5,6 @@ project_id  = "my-gcp-project-id"
 region      = "us-central1"
 environment = "prod"
 
-# GitHub repository that is allowed to deploy via Workload Identity Federation.
-# Format: "owner/repo" — e.g. "acme-corp/docstore"
-github_repo = "myorg/myrepo"
-
 # Google OAuth 2.0 client ID from https://console.cloud.google.com/apis/credentials
 google_oauth_client_id = "000000000000-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com"
 
@@ -19,3 +15,6 @@ db_password = "change-me-use-a-strong-random-password"
 # Cloud Run scaling (optional — defaults are fine for most cases)
 # cloud_run_min_instances = 0   # set to 1 to avoid cold starts
 # cloud_run_max_instances = 10
+
+# Set to false only when you want to run `terraform destroy`.
+# deletion_protection = true

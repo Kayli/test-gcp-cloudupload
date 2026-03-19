@@ -1,12 +1,10 @@
-# ── Cloud Run service ─────────────────────────────────────────────────────────
+# ── Cloud Run service — FastAPI API only ─────────────────────────────────────
 #
-# Single service that hosts both the FastAPI backend and the pre-built
-# React frontend (served as static files by FastAPI's StaticFiles mount).
+# The UI is served separately from GCS + CDN (see cdn.tf / storage.tf).
+# deploy.sh builds and pushes the API image first, then passes its digest
+# to `terraform apply -var api_image=<url>` so Terraform always owns the
+# full resource state — no placeholder image, no lifecycle hacks.
 #
-# On first `terraform apply` the placeholder image is deployed.
-# Subsequent image updates are done by the CD pipeline via `gcloud run deploy`
-# and Terraform ignores the image field thereafter.
-
 resource "google_cloud_run_v2_service" "api" {
   project  = var.project_id
   name     = "${local.app_name}-api"
@@ -22,8 +20,7 @@ resource "google_cloud_run_v2_service" "api" {
       max_instance_count = var.cloud_run_max_instances
     }
 
-    # Mount the Cloud SQL Auth Proxy Unix socket — Cloud Run manages the proxy
-    # automatically; the app connects via host="/cloudsql/<instance-name>".
+    # Cloud SQL Auth Proxy socket — Cloud Run manages the proxy automatically.
     volumes {
       name = "cloudsql"
       cloud_sql_instance {
@@ -32,9 +29,7 @@ resource "google_cloud_run_v2_service" "api" {
     }
 
     containers {
-      # Placeholder image used only on the very first deploy.
-      # The CD pipeline (`gcloud run deploy`) updates this on every push to main.
-      image = "us-docker.pkg.dev/cloudrun/container/hello"
+      image = var.api_image
 
       ports {
         container_port = 3000
@@ -45,7 +40,6 @@ resource "google_cloud_run_v2_service" "api" {
           cpu    = "1"
           memory = "512Mi"
         }
-        # Free CPU only while handling requests (scale-to-zero friendly)
         cpu_idle          = true
         startup_cpu_boost = true
       }
@@ -55,43 +49,34 @@ resource "google_cloud_run_v2_service" "api" {
         mount_path = "/cloudsql"
       }
 
-      # ── Non-sensitive config ────────────────────────────────────────────────
+      # ── Non-sensitive config ──────────────────────────────────────────────
       env {
         name  = "GCS_BUCKET"
         value = google_storage_bucket.uploads.name
       }
 
+      # Allow CORS from the CDN nip.io address.
       env {
-        name  = "CLOUD_SQL_INSTANCE"
-        value = google_sql_database_instance.main.connection_name
+        name  = "CORS_ORIGINS"
+        value = "http://${google_compute_global_address.ui_ip.address}.nip.io"
       }
 
+      # ── Secrets injected from Secret Manager ─────────────────────────────
       env {
-        name  = "DB_USER"
-        value = google_sql_user.app_user.name
-      }
-
-      env {
-        name  = "DB_NAME"
-        value = google_sql_database.app_db.name
-      }
-
-      # ── Secrets (injected from Secret Manager at runtime) ──────────────────
-      env {
-        name = "GOOGLE_OAUTH_CLIENT_ID"
+        name = "DATABASE_URL"
         value_source {
           secret_key_ref {
-            secret  = google_secret_manager_secret.oauth_client_id.secret_id
+            secret  = google_secret_manager_secret.database_url.secret_id
             version = "latest"
           }
         }
       }
 
       env {
-        name = "DB_PASSWORD"
+        name = "GOOGLE_OAUTH_CLIENT_ID"
         value_source {
           secret_key_ref {
-            secret  = google_secret_manager_secret.db_password.secret_id
+            secret  = google_secret_manager_secret.oauth_client_id.secret_id
             version = "latest"
           }
         }
@@ -120,22 +105,17 @@ resource "google_cloud_run_v2_service" "api" {
     }
   }
 
-  # Let the CD pipeline update the container image without Terraform reverting
-  # it back to the placeholder on the next `terraform apply`.
-  lifecycle {
-    ignore_changes = [template[0].containers[0].image]
-  }
-
   depends_on = [
     google_project_service.apis,
     google_sql_database_instance.main,
-    google_secret_manager_secret_version.db_password,
+    google_secret_manager_secret_version.database_url,
     google_secret_manager_secret_version.oauth_client_id,
     google_service_account.api,
+    google_compute_global_address.ui_ip,
   ]
 }
 
-# Allow unauthenticated (public) traffic — authentication is handled at the app layer
+# Public (unauthenticated) access — auth is enforced at the app layer.
 resource "google_cloud_run_v2_service_iam_member" "public_access" {
   project  = var.project_id
   location = var.region

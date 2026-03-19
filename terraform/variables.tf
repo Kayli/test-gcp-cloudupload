@@ -15,11 +15,6 @@ variable "environment" {
   default     = "prod"
 }
 
-variable "github_repo" {
-  description = "GitHub repository in owner/repo format — used to scope WIF tokens (e.g. myorg/myrepo)"
-  type        = string
-}
-
 variable "google_oauth_client_id" {
   description = "Google OAuth 2.0 Client ID for the web application"
   type        = string
@@ -42,4 +37,15 @@ variable "cloud_run_max_instances" {
   description = "Maximum Cloud Run instances"
   type        = number
   default     = 10
+}
+
+variable "api_image" {
+  description = "Full Artifact Registry image URL for the API (e.g. us-central1-docker.pkg.dev/proj/repo/docstore-api:20260101-120000). Passed by deploy.sh after the image is pushed."
+  type        = string
+}
+
+variable "deletion_protection" {
+  description = "Protect the Cloud SQL instance from accidental deletion (set to false to allow terraform destroy)"
+  type        = bool
+  default     = true
 }

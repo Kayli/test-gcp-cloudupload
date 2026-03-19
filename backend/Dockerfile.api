@@ -16,5 +16,10 @@ COPY backend/pyproject.toml ./backend/pyproject.toml
 # Runtime deps only — pytest/playwright run on the host, not inside this container.
 RUN pip install --no-cache-dir ./backend
 
+# Copy backend source so the image is self-contained (prod / Cloud Run).
+# In dev, docker compose bind-mounts the workspace root at /app so live edits
+# take effect immediately — this layer is simply shadowed by the mount.
+COPY backend/ ./backend/
+
 # Source is bind-mounted by docker-compose; this CMD runs from /app (repo root)
 CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "3000", "--reload"]

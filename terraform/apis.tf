@@ -1,7 +1,3 @@
-# Enable all GCP APIs that the project needs.
-# disable_on_destroy = false so terraform destroy doesn't break other workloads
-# that may be using the same project.
-
 locals {
   required_apis = [
     "run.googleapis.com",
@@ -12,6 +8,7 @@ locals {
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
     "cloudresourcemanager.googleapis.com",
+    "compute.googleapis.com",   # needed for global IP + CDN load balancer
   ]
 }
 

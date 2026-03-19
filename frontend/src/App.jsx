@@ -3,6 +3,10 @@ import AuthPanel from './AuthPanel.jsx'
 import Uploader from './Uploader.jsx'
 import Dashboard from './Dashboard.jsx'
 
+// In dev, VITE_API_URL is unset → relative URLs → Vite proxy handles routing to the API.
+// In prod, VITE_API_URL is the Cloud Run service URL baked in at build time.
+const API_BASE = import.meta.env.VITE_API_URL ?? ''
+
 // Initialise window globals immediately so Playwright sees them as soon as the
 // module is evaluated — before the first React render.
 window.dummyUser = null
@@ -31,7 +35,7 @@ export default function App() {
 
   // Fetch /config on mount and conditionally load Google Identity Services.
   useEffect(() => {
-    fetch('/config')
+    fetch(`${API_BASE}/config`)
       .then((r) => r.json())
       .then((cfg) => {
         const merged = { googleClientId: null, allowDevAuth: false, ...cfg }
@@ -71,7 +75,7 @@ export default function App() {
     const headers = { 'Content-Type': 'application/json' }
     if (idToken) headers['Authorization'] = 'Bearer ' + idToken
     else if (dummyUser) headers['x-dummy-user'] = dummyUser
-    const r = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) })
+    const r = await fetch(`${API_BASE}${url}`, { method: 'POST', headers, body: JSON.stringify(body) })
     return r.json()
   }
 
@@ -79,7 +83,7 @@ export default function App() {
     const headers = {}
     if (idToken) headers['Authorization'] = 'Bearer ' + idToken
     else if (dummyUser) headers['x-dummy-user'] = dummyUser
-    const r = await fetch(url, { headers })
+    const r = await fetch(`${API_BASE}${url}`, { headers })
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
     return r.json()
   }
