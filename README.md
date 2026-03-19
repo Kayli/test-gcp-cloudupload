@@ -99,6 +99,47 @@ All endpoints except `/health` and `/config` require authentication.
 | `MINIO_SECRET_KEY` | `minioadmin` | MinIO secret key |
 | `GCS_BUCKET` | *(unset)* | Set to use GCS instead of MinIO |
 
+## GCP deployment
+
+### Initial deploy / redeploy after nuke
+
+```bash
+bash scripts/deploy.sh
+```
+
+This runs `terraform apply`, which provisions all GCP infrastructure including the **Workload Identity Federation (WIF) pool** that GitHub Actions uses to authenticate without storing service-account keys.
+
+After `terraform apply` completes, update the GitHub repository secrets/variables with the outputs:
+
+```bash
+terraform -chdir=terraform output workload_identity_provider  # → GCP_WIF_PROVIDER (secret)
+terraform -chdir=terraform output deployer_service_account    # → GCP_SA_EMAIL (secret)
+terraform -chdir=terraform output image_repo                  # → GCP_IMAGE_REPO (variable)
+terraform -chdir=terraform output gcs_ui_bucket               # → GCP_UI_BUCKET (variable)
+```
+
+### CD pipeline
+
+The CD workflow (`.github/workflows/cd.yml`) is triggered manually via **Actions → Run workflow** in the GitHub UI. It builds and pushes the API image, deploys to Cloud Run, and syncs the UI bundle to GCS.
+
+> **Important:** The CD pipeline authenticates to GCP via WIF — no service-account key is stored in GitHub. If you nuke or destroy all Terraform infrastructure, the WIF pool is also destroyed. You must re-run `terraform apply` (i.e. `bash scripts/deploy.sh`) before the CD pipeline can authenticate again.
+
+### Suspend (pause billing, keep data)
+
+```bash
+bash scripts/deploy-suspend.sh
+```
+
+Suspends Cloud SQL and destroys all other infrastructure. Data is preserved at ~$1.50/mo storage cost.
+
+### Full teardown (destroy everything)
+
+```bash
+bash scripts/deploy-nuke.sh
+```
+
+Permanently deletes all infrastructure **and** all data. There is no undo.
+
 ## UI tests against a host browser
 
 To run browser tests against Chrome Canary on the host machine, start it first (from the host):
