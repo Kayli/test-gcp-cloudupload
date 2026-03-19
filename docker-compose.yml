@@ -41,7 +41,15 @@ services:
       api:
         condition: service_healthy
       minio:
-        condition: service_healthy 
+        condition: service_healthy
+    healthcheck:
+      # node is always available in node:20-slim; no need to install curl/wget.
+      test: ["CMD", "node", "-e",
+             "require('http').get('http://localhost:5173/',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
   # ── FastAPI backend ──────────────────────────────────────────────────────────
   api:
@@ -57,16 +65,19 @@ services:
       - path: .devcontainer/.env   # provides GOOGLE_OAUTH_CLIENT_ID and GCS_BUCKET etc.
         required: false            # file is absent in CI; all vars have safe defaults
     environment:
-      # ── compose-internal overrides ────────────────────────────────────────
-      # These two values differ from the host-side equivalents in .env because
-      # inside the compose network services are reached by their service name,
-      # not by localhost.  Everything else comes from env_file (.devcontainer/.env).
+      # ── compose-internal fixed overrides ─────────────────────────────────
+      # These always use compose-network service hostnames regardless of .env.
       MINIO_ENDPOINT: http://minio:9000
       DATABASE_URL: postgresql://docstore:docstore@postgres:5432/docstore
-      # MINIO_PUBLIC_URL has no default here — it MUST be set in .env.
-      # Local dev: http://localhost:5173 (Vite proxy)
-      # Tests:     http://localhost:9000 (direct MinIO, set by server.py / CI)
-      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL}
+      # ── shell pass-throughs (bare-key syntax) ─────────────────────────────
+      # If the variable IS set in the shell (CI step env, server.py subprocess)
+      # compose uses that value.  If the variable is NOT set in the shell,
+      # compose leaves env_file (.devcontainer/.env) authoritative — no override.
+      ALLOW_DEV_AUTH:
+      MINIO_PUBLIC_URL:
+      MINIO_ACCESS_KEY:
+      MINIO_SECRET_KEY:
+      MINIO_BUCKET:
     depends_on:
       minio:
         condition: service_healthy

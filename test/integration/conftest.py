@@ -118,9 +118,11 @@ def browser(playwright: Playwright):  # type: ignore[override]
 def browser_minio_url():
     """
     Restart the api with MINIO_PUBLIC_URL=UI_URL so presigned URLs are
-    reachable from the host browser (which cannot reach minio:9000 under DinD).
+    routed through the Vite proxy (localhost:5173/objstore/...) and are
+    therefore reachable from the browser — both the host Chrome (local dev)
+    and headless Chromium on the CI runner.
     Restored to http://localhost:9000 on teardown so the non-UI upload tests
-    (which run inside the devcontainer and PUT directly to MinIO) still work.
+    that PUT directly from the devcontainer / runner continue to work.
     """
     ui_url = os.getenv("UI_URL", "http://localhost:5173")
 
