@@ -1,7 +1,10 @@
 [tool.pytest.ini_options]
-# testpaths covers both suites; run them together with `pytest` or individually
-# with `pytest test/unit` or `pytest test/integration`.
-testpaths = ["test/unit", "test/integration"]
+# testpaths covers the integration suite; run with `pytest` or `pytest test/integration`.
+testpaths = ["test/integration"]
 # pythonpath ensures the workspace root (for `import backend.*`) and
 # the integration helper package (for `from helpers.server import …`) are on sys.path.
 pythonpath = [".", "test/integration"]
+# Kill any test that hangs for more than 30 s (catches lost DB connections, etc.).
+timeout = 30
+# thread mode works with psycopg2 / playwright without requiring signal support.
+timeout_method = "thread"

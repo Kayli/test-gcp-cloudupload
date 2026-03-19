@@ -123,3 +123,25 @@ def api_context(playwright: Playwright):
     ctx = playwright.request.new_context(base_url=APP_URL)
     yield ctx
     ctx.dispose()
+
+
+# ── DB isolation fixture ──────────────────────────────────────────────────────
+
+@pytest.fixture()
+def clean_db():
+    """
+    Truncate the files table before and after each test that requests this
+    fixture.  Used by test_db.py, which exercises the db layer directly.
+
+    Pre-test truncation handles residue from any previously crashed run.
+    Post-test truncation leaves a clean slate for the next test.
+
+    Truncation is done via db._truncate_for_tests(), which uses its own
+    short-lived connection so the test body always starts with _pg_conn=None.
+    """
+    import backend.db as db_module
+
+    db_module._truncate_for_tests()   # setup: wipe any leftover state
+    yield
+    db_module._truncate_for_tests()   # teardown: leave a clean slate
+

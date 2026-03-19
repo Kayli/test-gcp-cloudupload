@@ -1,13 +1,21 @@
 """
-Unit tests for backend/db.py.
+Integration tests for backend/db.py.
 
-No server, no network — each test gets an isolated in-memory SQLite file
-via the isolated_db fixture in conftest.py.
+These tests call the db module directly (bypassing the HTTP layer) against the
+real PostgreSQL instance started by docker-compose.  Each test is isolated via
+the clean_db fixture, which truncates the files table before and after the test.
 """
 
 import pytest
 
 from backend.db import complete_upload, get_file, insert_upload, list_files
+
+# Apply clean_db isolation and a tight timeout to every test in this module.
+# 5 s is plenty for direct DB calls; a hang almost certainly means a lost connection.
+pytestmark = [
+    pytest.mark.usefixtures("clean_db"),
+    pytest.mark.timeout(5),
+]
 
 
 def _insert(**kwargs: object) -> None:
