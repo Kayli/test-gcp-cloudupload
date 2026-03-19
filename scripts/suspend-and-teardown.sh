@@ -62,12 +62,14 @@ terraform -chdir="$TF_DIR" init \
   -input=false -reconfigure 2>&1 | tail -3
 
 # ── 3. Remove SQL + AR resources from state so destroy doesn't touch them ─────
-log "Detaching SQL and AR resources from Terraform state…"
+log "Detaching SQL, AR, and uploads bucket from Terraform state…"
 for res in \
     google_sql_database_instance.main \
     google_sql_database.app_db \
     google_sql_user.app_user \
-    google_artifact_registry_repository.app; do
+    google_artifact_registry_repository.app \
+    google_storage_bucket.uploads \
+    google_storage_bucket_iam_member.api_storage_admin; do
   terraform -chdir="$TF_DIR" state rm "$res" 2>/dev/null \
     && log "  detached $res" \
     || warn "  $res not in state (skipping)"
@@ -89,13 +91,11 @@ gcloud artifacts repositories delete docstore-images \
   --location="$REGION" --project="$PROJECT_ID" --quiet 2>/dev/null \
   && ok "AR repo deleted" || warn "AR repo already gone (skipping)"
 
-# ── 5. Empty GCS buckets so Terraform can delete them ────────────────────────
-log "Emptying GCS buckets…"
-for bucket in "${PROJECT_ID}-docstore-ui" "${PROJECT_ID}-docstore-uploads"; do
-  gcloud storage rm -r "gs://${bucket}/**" --quiet 2>/dev/null \
-    && log "  emptied gs://${bucket}" \
-    || warn "  gs://${bucket} already empty (skipping)"
-done
+# ── 5. Empty UI GCS bucket so Terraform can delete it ────────────────────────
+log "Emptying UI GCS bucket…"
+gcloud storage rm -r "gs://${PROJECT_ID}-docstore-ui/**" --quiet 2>/dev/null \
+  && log "  emptied gs://${PROJECT_ID}-docstore-ui" \
+  || warn "  gs://${PROJECT_ID}-docstore-ui already empty (skipping)"
 
 # ── 6. Terraform destroy everything else ─────────────────────────────────────
 API_IMAGE="$(terraform -chdir="$TF_DIR" output -raw api_image 2>/dev/null || echo placeholder)"
@@ -118,8 +118,12 @@ echo ""
 echo "  Cloud SQL '${SQL_INSTANCE}' is SUSPENDED — data preserved."
 echo "  Cost while suspended: ~\$1.50/mo (10 GB SSD storage)."
 echo ""
-echo "  To delete it permanently when ready:"
+echo "  Uploads bucket 'gs://${PROJECT_ID}-docstore-uploads' is PRESERVED."
+echo "  Delete it manually when ready:"
+echo "    gcloud storage rm -r gs://${PROJECT_ID}-docstore-uploads"
+echo ""
+echo "  To delete Cloud SQL permanently when ready:"
 echo "    gcloud sql instances delete ${SQL_INSTANCE} --project=${PROJECT_ID}"
 echo ""
-echo "  To resume it later:"
+echo "  To resume Cloud SQL later:"
 echo "    gcloud sql instances patch ${SQL_INSTANCE} --activation-policy=ALWAYS --project=${PROJECT_ID}"
