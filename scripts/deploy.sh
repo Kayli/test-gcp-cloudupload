@@ -80,6 +80,7 @@ if [[ "$SKIP_API" == true ]]; then
 else
   log "Building API image…"
   docker build \
+    --platform linux/amd64 \
     --file backend/Dockerfile.api \
     --tag "$API_IMAGE" \
     --tag "${IMAGE_REPO}/docstore-api:latest" \

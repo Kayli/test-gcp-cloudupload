@@ -91,9 +91,9 @@ resource "google_storage_bucket_iam_member" "deployer_ui_writer" {
 }
 
 # Invalidate the CDN cache after a UI deploy
-# (requires compute.urlMaps.invalidateCache, included in loadBalancingAdmin).
+# (requires compute.urlMaps.invalidateCache, included in compute.networkAdmin).
 resource "google_project_iam_member" "deployer_lb_admin" {
   project = var.project_id
-  role    = "roles/compute.loadBalancingAdmin"
+  role    = "roles/compute.networkAdmin"
   member  = "serviceAccount:${google_service_account.deployer.email}"
 }

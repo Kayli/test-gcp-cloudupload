@@ -6,7 +6,9 @@ resource "google_secret_manager_secret" "database_url" {
   secret_id = "${local.app_name}-database-url"
   labels    = local.labels
 
-  replication { auto {} }
+  replication {
+    auto {}
+  }
   depends_on = [google_project_service.apis]
 }
 
@@ -22,7 +24,9 @@ resource "google_secret_manager_secret" "oauth_client_id" {
   secret_id = "${local.app_name}-oauth-client-id"
   labels    = local.labels
 
-  replication { auto {} }
+  replication {
+    auto {}
+  }
   depends_on = [google_project_service.apis]
 }
 
