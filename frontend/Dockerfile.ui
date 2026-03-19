@@ -31,6 +31,12 @@ RUN npm install -g serve
 # these layers are replaced by the live source — HMR works as expected.
 COPY frontend/ ./frontend/
 
+# Pre-build the frontend so /app/public/ exists inside the image.
+# docker-compose mounts this via a named volume (ui_public) so both the ui
+# and api containers share the built assets — even in dev mode where the
+# workspace bind-mount would otherwise shadow the directory.
+RUN cd /app/frontend && npx vite build
+
 COPY frontend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 

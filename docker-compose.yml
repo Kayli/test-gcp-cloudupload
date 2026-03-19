@@ -34,6 +34,7 @@ services:
     volumes:
       - .:/app              # bind-mount source for HMR
       - ui_node_modules:/app/node_modules  # keep container node_modules isolated
+      - ui_public:/app/public              # pre-built static assets (from image layer)
     environment:
       API_URL:   http://api:3000
       MINIO_URL: http://minio:9000   # Vite proxy target for /objstore/* inside compose
@@ -61,6 +62,7 @@ services:
     volumes:
       - .:/app                # bind-mount source for hot-reload
       - api_data:/app/data    # persist SQLite metadata DB
+      - ui_public:/app/public # pre-built static assets shared from ui image
     env_file:
       - path: .devcontainer/.env   # provides GOOGLE_OAUTH_CLIENT_ID and GCS_BUCKET etc.
         required: false            # file is absent in CI; all vars have safe defaults
@@ -137,4 +139,5 @@ volumes:
   minio_data:
   api_data:
   ui_node_modules:
+  ui_public:
   pg_data:
